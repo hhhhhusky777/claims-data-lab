@@ -7,7 +7,7 @@
 | Field | Value |
 | --- | --- |
 | Project / repository | https://github.com/hhhhhusky777/claims-data-lab |
-| Adoption state | `DRAFT` |
+| Adoption state | `INSTALLED` |
 | State before block | `None` |
 | Playbook source repository | `https://github.com/hhhhhusky777/spec-driven-delivery-playbook.git` |
 | Playbook revision | `d038cdb6878232583085231f57dcc4b872124242` |
@@ -20,7 +20,7 @@
 | Target base revision | `26c219a905c2ea98cdf19210e9fa39928962abd9` |
 | Adoption owner | Repository owner hhhhhusky777 |
 | Required review | Two independent adoption reviews followed by human acceptance |
-| Last verified | 2026-11-18; README and tracked fixtures inspected; runtime pin validated |
+| Last verified | 2026-11-18; candidate 243c302 passed two independent reviews; owner accepted adoption in chat; review evidence in PR #1 |
 
 ## Canonical project authorities and discovery inventory
 
@@ -54,4 +54,4 @@ The installer and runtime are machine-local and ignored through Git's local excl
 | Performance | Numeric workload and targets remain open; does not block adoption or correctness work; blocks dependent performance decisions until accepted |
 | CI and environments | Deferred until runnable project exists |
 | Playbook deviations | None proposed |
-| Human decision | Review project boundaries and accept adoption after independent reviews; protected-target merge is separate |
+| Human decision | Owner accepted adoption of candidate 243c302 after both reviews; acceptance recorded in [PR #1](https://github.com/hhhhhusky777/claims-data-lab/pull/1). Protected-target merge remains separate. |
