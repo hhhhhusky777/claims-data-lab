@@ -1,0 +1,17 @@
+d038cdb6878232583085231f57dcc4b872124242
+100644 blob 65a10ebcecea9daa3919a77aa0988a8c3b08fd0f	knowledge-base/README.md
+100644 blob 629292643c78d7f608ee1a84a874a349da496f48	knowledge-base/architecture-scope-and-assumptions.md
+100644 blob ed1d42c9a14e15bd479da4bd38165928b5f739e5	knowledge-base/code-level-performance-engineering.md
+100644 blob 8dde6e2839aeb19c2ee65b7d42b4d692168a5dac	knowledge-base/code-simplicity-and-clarity.md
+100644 blob 3b671f23a063014dbb747b8b2435cd1d479099f4	knowledge-base/contracts-and-compatibility.md
+100644 blob a7417e1a9138efc2740ce2381305a8858603da77	knowledge-base/efficiency-and-concurrency.md
+100644 blob d9cadffd87b34b5e74e53465ea52fa42d3ecbc59	knowledge-base/error-handling-design.md
+100644 blob c786894142759c8e4ee17052f25da022e00388cb	knowledge-base/experience-and-learning.md
+100644 blob 2327bc93ac775911d4f01736487fc636dcb6843e	knowledge-base/observability-and-diagnosability.md
+100644 blob a785ecd49f960c21bc65e41710f6ff07878dc689	knowledge-base/performance-design.md
+100644 blob 1462264a2f71eab83964c8450794941001e41cbb	knowledge-base/proportional-review.md
+100644 blob a5250aaae83ab20e37715bea81abc41e95781829	knowledge-base/security-basics.md
+100644 blob 327a9b5c3f2ac3f9c8ce1d7dd96b15b37f50a46c	knowledge-base/simple-design-and-reuse.md
+100644 blob 6eeaa0ec4c08d979c09ca169b17f7bef0f515fd2	knowledge-base/solution-research.md
+100644 blob 384dcc2d11eb203b65962012af5b591554de2b27	knowledge-base/task-planning-and-decomposition.md
+100644 blob e3edea5740740af9226bee15f5f3d26e1c367e00	knowledge-base/testing-and-reproduction.md

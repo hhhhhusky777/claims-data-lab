@@ -51,3 +51,24 @@ Keep ingestion, publication, and serving behind clear boundaries. Ingestion owns
 ## First contribution
 
 Start with a test for `$150 → $140 → $140 after replay`. Implement the smallest pipeline that passes it, then add rejection, reconciliation, and the interrupted-publication test.
+
+## Performance Goals and Evidence
+
+The repository owner approves workload boundaries and performance goals. Correctness is the first milestone. The small tracked fixtures establish expected results and provide no capacity or latency claim. No numeric performance target has been accepted yet.
+
+Before optimization, agree on generated row counts, key distribution and skew, batch sizes, query frequency, concurrency and the available machine resources. Add a reproducible benchmark command with its seed and parameters when the runnable pipeline exists. Record end-to-end batch seconds, accepted rows per second, and report query latency in milliseconds. Capture the commit, environment, dataset parameters and repeated-run results with the comparison in the pull request. Compare unchanged workloads and verify identical reports before interpreting improvement. Document variability and unmeasured conditions.
+
+Revisit the contract with the owner when workload, resources, deployment or performance goals change. Missing benchmark inputs defer dependent performance choices while Phase 1 correctness work proceeds.
+
+## Delivery playbook setup
+
+The [adoption manifest](.github/spec-driven-delivery/project-adoption-manifest.md) records the installation state and pin. Each clone generates its own ignored runtime. Obtain the installer from the exact revision and run it in the project root:
+
+```sh
+git clone https://github.com/hhhhhusky777/spec-driven-delivery-playbook.git ../claims-sdd-playbook
+git -C ../claims-sdd-playbook checkout --detach d038cdb6878232583085231f57dcc4b872124242
+cp ../claims-sdd-playbook/install-sdd.sh ./install-sdd.sh
+./install-sdd.sh --revision d038cdb6878232583085231f57dcc4b872124242
+```
+
+Give the agent `.sdd-runtime/agent-guide.md` and follow its installed skill. See [AGENTS.md](AGENTS.md) for learning and project authority boundaries.
