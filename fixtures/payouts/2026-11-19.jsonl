@@ -1,0 +1,4 @@
+{"payout_id":"T2","version":2,"policy_id":"P1","settled_on":"2026-11-18","currency":"USD","amount_cents":4000}
+{"payout_id":"T4","version":1,"policy_id":"P2","settled_on":"2026-11-19","currency":"USD","amount_cents":7000}
+{"payout_id":"T5","version":1,"policy_id":"P1","settled_on":"2026-11-19","currency":"USD","amount_cents":-2000}
+{"payout_id":"T6","version":1,"policy_id":"P99","settled_on":"2026-11-19","currency":"USD","amount_cents":3000}
