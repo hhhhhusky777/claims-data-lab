@@ -1,4 +1,4 @@
-# Implementation Plan — Phase 1 transformation scaffold
+# Implementation Plan — Phase 1 transformation implementation
 
 <!-- sdd: implementation-plan -->
 
@@ -8,9 +8,9 @@
 | --- | --- |
 | State | `DRAFT` |
 | Active tasks | `None` |
-| Next ready task | T1 after plan acceptance |
-| Active blocker | Plan review and owner acceptance |
-| Implementation mode | human-review-before-merge; Autopilot off |
+| Next ready task | T1 after amended-design and plan acceptance |
+| Active blocker | A1 amendment and revised-plan review/acceptance |
+| Implementation mode | human-review-before-merge; Autopilot off; stop after every completed task |
 | Delivery branch / target | `feature/phase1-transform` / `main` |
 | Owner | Repository owner hhhhhusky777 |
 | Primary need | [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2) |
@@ -20,7 +20,7 @@
 
 ## Governing inputs
 
-The owner's narrowed transformation-only scope and explicit design acceptance govern delivery. The [whiteboard](solution-whiteboard.md) owns D1–D7, V1/V2 and FC1. [AGENTS.md](../../AGENTS.md) owns the learner-implementation boundary. Preserve fixture bytes and secrets. The assistant delivers declarations, type annotations and English docstrings with NotImplementedError method/function bodies. Runtime code, SQL implementation, executable integration tests and performance tuning are learner work.
+The owner's narrowed transformation-only scope and explicit design acceptance govern delivery. The [whiteboard](solution-whiteboard.md) owns D1–D7, V1/V2 and FC1. [AGENTS.md](../../AGENTS.md) owns the learner-implementation boundary. Preserve fixture bytes and secrets. The owner explicitly requested fully implemented code for reading and learning. The assistant implements runtime code and focused tests with type annotations and English docstrings, then stops after each completed task. Performance tuning stays deferred. A1 supersedes the earlier stub-only boundary.
 
 ## Tasks and design mapping
 
@@ -28,15 +28,17 @@ All tasks use `feature/phase1-transform`, PR #2, required target `main`, under o
 
 | ID | State | Depends on | Consumed design | Scaffold work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | PLANNED | None | D1–D7 | Define the complete typed module surface below, with English contracts and unimplemented bodies | Fixed mapping, sequential pipeline; no product behavior | Docstrings express D5/D6, FC1, V1 and V2 | Python syntax/import checks and inspection of annotations and NotImplementedError bodies |
-| T2 | PLANNED | T1 | D1–D3, D7; canonical authority updates | Add a payout CSV equivalent and expected converted values; reconcile README and manifest to the accepted scope; document learner run/setup goals | Keep existing input fixtures; no financial report/version merge requirements | Describe row rejection, plain repeated inserts and ambiguous commit handling | Compare fixture correspondence and check documentation links/contracts against T1 |
-| T3 | PLANNED | T1, T2 | D1; D2/D5/D6 evidence obligations | Complete scaffold inspection and provide a learner acceptance-scenario inventory in README | No executable product-test implementations or live database claims | Name V1/V2/FC1 scenarios and distinction between confirmed rollback and unknown commit | Annotated scaffold is importable; all runtime scenarios explicitly pending learner implementation |
+| T1 | PLANNED | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
+| T2 | PLANNED | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
+| T3 | PLANNED | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
+
+After each task passes its focused checks and both retained reviewers approve its exact candidate, mark it DONE and stop. The owner chooses when to continue. Do not start a dependent task automatically.
 
 ## Module and callable inventory
 
-Each module has a purpose docstring. Each function/method has Inputs, Returns, Effects, Raises and an example where useful. Body is `raise NotImplementedError`. Type-only containers may use dataclasses with annotated fields and no custom behavior. Use Python 3.11+ annotations, Psycopg 3 connection typing, pathlib.Path, datetime.date and collections.abc interfaces. Annotations describe supported values; they do not validate them at runtime.
+Each module has a purpose docstring. Each function/method has Inputs, Returns, Effects, Raises and an example where useful, and a complete implementation. Data containers use dataclasses with annotated fields where suitable. Use Python 3.11+ annotations, Psycopg 3 connection typing, pathlib.Path, datetime.date and collections.abc interfaces. Annotations describe supported values; they do not validate them at runtime.
 
-| Module | Declaration | Learner responsibility described in annotation/docstring |
+| Module | Declaration | Implementation responsibility |
 | --- | --- | --- |
 | `models.py` | `SourceRecord(source_file: str, source_record: int, values: dict[str, object])` | Parsed raw object with source location |
 | `models.py` | `ImportedPayout(source_file: str, source_record: int, payout_id: str, version: int, policy_id: str, settled_on: date, currency: str, amount_cents: int)` | Fixed target fields; database generates technical ID |
@@ -58,29 +60,27 @@ The fixed field conversion in transform.py is the mapping. Avoid generic schema/
 
 | Owner | Scenario | Current coverage / boundary |
 | --- | --- | --- |
-| T1/T3 assistant | Declarations import, annotations resolve in the configured environment, bodies are unimplemented | Planned scaffold checks |
-| T2 assistant | CSV/JSONL fixtures describe corresponding values, dates and negative amounts | Planned fixture/document inspection |
-| Learner runtime | Query actual PostgreSQL columns after each supported input format | Pending implementation |
-| Learner runtime | Repeat IDs are retained; reimport appends; version remains ordinary payload | Pending implementation |
-| Learner runtime | Empty data input, reordered CSV columns, extra fields, final partial group | Pending implementation; use accepted required-header rule for CSV |
-| Learner runtime | Malformed JSON, blank JSONL line, null/missing field, invalid integer/date and BIGINT overflow | Pending V1 tests |
-| Learner runtime | Invalid batch_rows fails before insertion | Pending V2 test |
-| Learner runtime | Fatal error after an earlier group leaves no file inserts; prior committed rows remain | Pending FC1 integration test |
-| Learner runtime | Unknown commit outcome is reported honestly, without automatic replay | Pending diagnostic verification |
+| T1 | Real fixture JSONL conversion; equivalent CSV records; malformed/non-object/blank JSONL; missing/null fields; strict dates and BIGINT integers including booleans and overflow | Planned focused unit tests |
+| T1 | Reordered/extra CSV columns, required headers, malformed framing, logical CSV record numbers, BOM and incremental iteration | Planned focused unit tests |
+| T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Planned focused integration tests |
+| T2 | Bounded insert groups and final partial group; confirmed rollback after earlier insert; unknown commit truthfully propagated | Planned focused boundary and integration tests |
+| T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Planned focused integration tests |
+| T3 | CLI options, DATABASE_URL handling, invalid batch_rows before inserts, redacted errors, committed counts | Planned focused CLI tests |
+| T3 | Both real input formats through CLI into PostgreSQL, expected values and reject locations | Planned end-to-end tests |
 
 ## Validation, review and completion
 
-Focused scaffold checks use Python syntax/import inspection with declared dependencies available. No database/container or package download is needed just to review this plan. Dependency installation and runtime commands are documented only when chosen within accepted scope and download authority. Product correctness remains unproven until learner implementation and actual PostgreSQL tests.
+Run task-focused tests before both retained reviewers inspect each completed task. Use an isolated local development PostgreSQL instance for database checks, verifying environment ownership first. Reuse available dependency caches and follow host download rules before fetching packages or images. If actual PostgreSQL evidence cannot be obtained, report the gap and leave T2 incomplete rather than substitute mocks for integration proof. Unit tests may isolate failure paths that cannot be safely reproduced with a real connection. Final-gate checks wait for the playbook implementation audit and human acceptance.
 
 Before final tests, complete the playbook implementation audit, retained reviews and human implementation acceptance. Before final merge review, reconcile README and manifest, preserve the full concluded whiteboard and plan in one closing archive, reset the live whiteboard and remove this live plan according to the accepted closing workflow. Detailed approval, validation and merge evidence belongs in PR #2. No archive/reset occurs during planning.
 
 | Delivery outcome | Definition of Done | Current result |
 | --- | --- | --- |
-| Annotated starter | Complete callable inventory with no product implementation | Pending T1 |
-| Canonical contract | README/manifest reflect PostgreSQL transformation and fixture expectations | Pending T2 |
-| Learner handoff | Scaffold checks pass and unrun runtime acceptance is explicit | Pending T3 |
+| File transformation | Complete typed readers and conversion with focused tests | Pending T1 |
+| Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Pending T2 |
+| Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Pending T3 |
 | Merge candidate | Required review, exact-head validation and closing archive/reset | Pending final readiness and owner authority |
 
 ## Human decision
 
-Accept the scaffold-only task plan. Autopilot remains off unless explicitly enabled. With it enabled, authority is limited to in-scope scaffold preparation through required review and final merge readiness; human implementation acceptance and merge into main remain separate. No learner runtime implementation is authorized by this plan.
+Accept the A1 implementation scope and revised task plan. Autopilot remains off, honoring the explicit instruction to stop after every completed task. Scope authorization to implement does not authorize automatic continuation between tasks or merge into main. The reviewed implementation audit and final validation gates remain separate.

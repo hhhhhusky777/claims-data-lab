@@ -4,17 +4,17 @@
 
 | Field | Value |
 | --- | --- |
-| State | `CONCLUDED` |
-| Need / issue | Phase 1 input-format transformation scaffold |
+| State | `DISCUSSION` |
+| Need / issue | Phase 1 input-format transformation implementation |
 | Owner | Repository owner hhhhhusky777 |
 | Concluded design revision | `1b21d43ea1274c4fb09975eb9eb5e4784b3a15ce` |
-| Open owner decisions | `None` |
+| Open owner decisions | Accept reviewed A1 implementation-scope amendment and task plan |
 
 ## Discussion and reconciliation
 
 | ID | Owner direction / earlier option | Resolution |
 | --- | --- | --- |
-| DR1 | Learner implements annotated module/class/function skeletons | D1 retained |
+| DR1 | Owner now requests complete implementation to read and learn, stopping after each completed task | D1 amended under A1 |
 | DR2 | First correctness, then performance, then remaining knowledge areas | D2 retained |
 | DR3 | Earlier SQLite reporting, update versions and duplicate detection | D3 supersedes with PostgreSQL transformation only, as explicitly requested |
 | DR4 | Large inputs and bounded memory | D4 incremental reading and bounded insert groups |
@@ -24,8 +24,8 @@
 
 | ID | Outcome and boundary | Acceptance evidence |
 | --- | --- | --- |
-| D1 | Deliver English annotated Python signatures, typed data containers and NotImplementedError bodies for the learner. Runtime implementation is later learner work. | Import/compile scaffold and inspect that behavior remains unimplemented |
-| D2 | Phase 1 runtime goal is CSV/JSONL to PostgreSQL, verified using SQL. Performance and extra features follow a correct baseline. | Integration tests query actual inserted columns and counts when learner code exists |
+| D1 | Deliver fully implemented Python modules with type annotations, English docstrings, focused tests and runnable PostgreSQL transformation. Owner reads code to learn. Stop after every completed task for owner continuation. | Task-focused checks verify implemented outcomes; final acceptance includes actual PostgreSQL integration |
+| D2 | Phase 1 runtime goal is CSV/JSONL to PostgreSQL, verified using SQL. Performance and extra features follow a correct baseline. | Integration tests query actual inserted columns and counts when implementation exists |
 | D3 | Python 3.11+ with Psycopg 3. One input file per invocation. Plain inserts preserve every accepted record, including repeat IDs and versions. Each rerun imports the file again. No business-key merge, ordering, deduplication, policy reference check, financial aggregation or HTTP service. | Two rows with the same payout_id remain two rows |
 | D4 | Sequential reader, transformer and writer in one process. Read one CSV logical record or JSONL line at a time, buffering at most configurable batch_rows transformed records. Document memory as O(largest record + bounded batch), not a hard byte ceiling. No producer queue or disk spool. | Reader iteration and batch-boundary tests, including final partial batch |
 | D5 | Writer owns one PostgreSQL transaction per input file. Insert groups use executemany with bound parameters. Successful completion commits all accepted rows; fatal read or database failure rolls back the file. Preserve original exception causes. | Inject failure after an earlier insert group and verify no new rows survived |
@@ -48,7 +48,7 @@ Use one fixed table `imported_payouts` for the first exercise. Map fields by nam
 | currency | TEXT NOT NULL | Required nonempty input string; no external currency registry check |
 | amount_cents | BIGINT NOT NULL | Signed integer cents from input |
 
-CSV opens with utf-8-sig and newline=''. JSONL opens with utf-8-sig. Ignore extra fields. Require named columns in CSV header, allowing any order. CSV integer values use signed decimal integer text. JSON integer values must be actual integers, excluding booleans; both must fit PostgreSQL BIGINT. Missing/null required values are row errors. JSONL non-object values and blank lines are row errors. A malformed CSV stream or missing required CSV header aborts the file, because reliable record boundaries or mappings are unavailable. Existing JSONL samples are raw examples; add a payout CSV counterpart with known transformed values during scaffold fixture work. `policies.csv` is retained reference data and is outside this import's target contract.
+CSV opens with utf-8-sig and newline=''. JSONL opens with utf-8-sig. Ignore extra fields. Require named columns in CSV header, allowing any order. CSV integer values use signed decimal integer text. JSON integer values must be actual integers, excluding booleans; both must fit PostgreSQL BIGINT. Missing/null required values are row errors. JSONL non-object values and blank lines are row errors. A malformed CSV stream or missing required CSV header aborts the file, because reliable record boundaries or mappings are unavailable. Existing JSONL samples are raw examples; add a payout CSV counterpart with known transformed values during fixture work. `policies.csv` is retained reference data and is outside this import's target contract.
 
 ### Architecture and behavior
 
@@ -92,8 +92,8 @@ Psycopg transaction contexts support the selected commit/rollback boundary. exec
 
 | Design | Canonical owner | Required update |
 | --- | --- | --- |
-| D2-D7 | README Phase 1 | Replace SQLite/report/replay contract with agreed PostgreSQL transformation contract during scaffold delivery; preserve later roadmap |
-| D1 | AGENTS.md | Existing learner-implementation boundary already covers this outcome |
+| D2-D7 | README Phase 1 | Replace SQLite/report/replay contract with agreed PostgreSQL transformation contract during implementation delivery; preserve later roadmap |
+| D1 | AGENTS.md | Its explicit-request exception permits full implementation under the owner’s new request |
 | D2-D7 | Adoption manifest authority links | Reconcile obsolete report and version references with README, retaining installed pin and adoption boundaries |
 
 ## Newly introduced validations
@@ -115,6 +115,12 @@ Psycopg transaction contexts support the selected commit/rollback boundary. exec
 | --- | --- | --- | --- |
 | None | None | Supported input and operational boundaries are explicitly defined above | None |
 
+## Design amendment A1
+
+| Amendment | Changed design points | Reason and impact | Owner decision |
+| --- | --- | --- | --- |
+| A1 | D1 and corresponding learner-only descriptions | Owner requested all code implemented for reading and learning, with a stop after each task. D2–D7, target schema, V1/V2 and FC1 are preserved. | Explicit scope authorization in chat; exact amended candidate awaits review and acceptance |
+
 ## Human brief
 
-This is the exact proposed Phase 1 contract for review. PostgreSQL integration, CLI runtime and tests remain learner implementation. Design review approves the schema, memory/transaction boundaries, V1/V2 and FC1 before conclusion. Later scaffold delivery provides annotated stubs and fixtures. No plan or product implementation is present yet.
+A1 changes delivery from annotated stubs to complete implementation with focused tests. Proposed task boundaries are file parsing/transformation, PostgreSQL pipeline, then CLI and end-to-end documentation. Stop after each completed task. Previously accepted runtime contracts and rejection/failure dispositions are unchanged. No implementation is claimed yet.
