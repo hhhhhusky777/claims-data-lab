@@ -4,11 +4,11 @@
 
 | Field | Value |
 | --- | --- |
-| State | `DISCUSSION` |
+| State | `CONCLUDED` |
 | Need / issue | Phase 1 input-format transformation implementation |
 | Owner | Repository owner hhhhhusky777 |
-| Concluded design revision | `1b21d43ea1274c4fb09975eb9eb5e4784b3a15ce` |
-| Open owner decisions | Accept reviewed A1 implementation-scope amendment and task plan |
+| Concluded design revision | `7b6d7cc23e545fce9e6599e4eae00aa5070d6a6e` |
+| Open owner decisions | `None` |
 
 ## Discussion and reconciliation
 
@@ -119,7 +119,7 @@ Psycopg transaction contexts support the selected commit/rollback boundary. exec
 
 | Amendment | Changed design points | Reason and impact | Owner decision |
 | --- | --- | --- | --- |
-| A1 | D1 and corresponding learner-only descriptions | Owner requested all code implemented for reading and learning, with a stop after each task. D2–D7, target schema, V1/V2 and FC1 are preserved. | Explicit scope authorization in chat; exact amended candidate awaits review and acceptance |
+| A1 | D1 and corresponding learner-only descriptions | Owner requested all code implemented for reading and learning, with a stop after each task. D2–D7, target schema, V1/V2 and FC1 are preserved. | Owner accepted exact reviewed amendment and task plan in chat on 2026-11-19 |
 
 ## Human brief
 
