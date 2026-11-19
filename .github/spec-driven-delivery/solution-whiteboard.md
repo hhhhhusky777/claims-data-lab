@@ -80,6 +80,7 @@ Psycopg transaction contexts support the selected commit/rollback boundary. exec
 | Efficiency and concurrency | Sequential D4 avoids queue coordination; independent design reviews run separately | Covered |
 | Experience and learning | Existing project Experience has no lessons; consult it and preserve verified lessons when implementation supplies evidence | Covered |
 | Performance design | D2/D4 establish a bounded baseline; no numeric throughput goal or optimization claim | Covered |
+| Proportional review | Review schema, rejection and transaction risks against the owner's narrow transformation scope; avoid speculative merge or queue requirements | Covered |
 | Security basics | D7 environment credentials and synthetic data; rejection artifacts remain local and ignored | Covered |
 | Simple design and reuse | Standard csv/json and Psycopg, one table and fixed mapping; no framework | Covered |
 | Solution research | Official Psycopg sources support transaction and grouped-insert choices | Covered |
