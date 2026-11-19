@@ -7,8 +7,8 @@
 | Field | Value |
 | --- | --- |
 | State | `IN_PROGRESS` |
-| Active tasks | T1 — focused checks passed; candidate review |
-| Next ready task | T2 after T1 completes and owner requests continuation |
+| Active tasks | `None` — stopped after T1 as requested |
+| Next ready task | T2 — awaiting owner continuation |
 | Active blocker | None |
 | Implementation mode | human-review-before-merge; Autopilot off; stop after every completed task |
 | Delivery branch / target | `feature/phase1-transform` / `main` |
@@ -28,7 +28,7 @@ All tasks use `feature/phase1-transform`, PR #2, required target `main`, under o
 
 | ID | State | Depends on | Consumed design | Scaffold work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | IN_PROGRESS | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
+| T1 | DONE | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
 | T2 | PLANNED | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
 | T3 | PLANNED | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
 
@@ -76,14 +76,14 @@ Before final tests, complete the playbook implementation audit, retained reviews
 
 | Delivery outcome | Definition of Done | Current result |
 | --- | --- | --- |
-| File transformation | Complete typed readers and conversion with focused tests | Implemented; both-reviewer candidate review pending |
+| File transformation | Complete typed readers and conversion with focused tests | Implemented; 18 focused tests passed; both retained reviewers approved T1 candidate 42e52d6 |
 | Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Pending T2 |
 | Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Pending T3 |
 | Merge candidate | Required review, exact-head validation and closing archive/reset | Pending final readiness and owner authority |
 
 ## Task T1 result
 
-Implemented claims_data_lab models, errors, readers and transformation with the Python standard library. SourceRecord includes input_format metadata to distinguish CSV numeric strings from strict JSON native integers. No database, queue or CLI behavior is introduced. Python 3.14.5 focused test command `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` passed 18 tests. The tests use actual temporary files and tracked JSONL fixtures. PostgreSQL and end-to-end obligations remain owned by T2/T3.
+Implemented claims_data_lab models, errors, readers and transformation with the Python standard library. SourceRecord includes input_format metadata to distinguish CSV numeric strings from strict JSON native integers. Both retained reviewers approved exact T1 candidate 42e52d6 with no findings and independently passed all 18 tests. Task T1 is DONE; execution stops until owner continuation. No database, queue or CLI behavior is introduced. Python 3.14.5 focused test command `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` passed 18 tests. The tests use actual temporary files and tracked JSONL fixtures. PostgreSQL and end-to-end obligations remain owned by T2/T3.
 
 ## Human decision
 
