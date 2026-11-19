@@ -6,17 +6,17 @@
 
 | Field | Value |
 | --- | --- |
-| State | `DRAFT` |
-| Active tasks | `None` |
-| Next ready task | T1 after amended-design and plan acceptance |
-| Active blocker | A1 amendment and revised-plan review/acceptance |
+| State | `IN_PROGRESS` |
+| Active tasks | T1 — focused checks passed; candidate review |
+| Next ready task | T2 after T1 completes and owner requests continuation |
+| Active blocker | None |
 | Implementation mode | human-review-before-merge; Autopilot off; stop after every completed task |
 | Delivery branch / target | `feature/phase1-transform` / `main` |
 | Owner | Repository owner hhhhhusky777 |
 | Primary need | [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2) |
-| Concluded whiteboard | [Solution](solution-whiteboard.md), accepted content `1b21d43`, frozen by `8c6305a` |
+| Concluded whiteboard | [Solution](solution-whiteboard.md), accepted A1 content `7b6d7cc`, frozen by `8f94dbe` |
 | Required reviewers | Retained phase1_design_a and phase1_design_b |
-| Last verified | 2026-11-19; both reviewers verified metadata-only conclusion transition |
+| Last verified | 2026-11-19; owner accepted A1 and plan; both reviewers verified metadata-only conclusion transition |
 
 ## Governing inputs
 
@@ -28,7 +28,7 @@ All tasks use `feature/phase1-transform`, PR #2, required target `main`, under o
 
 | ID | State | Depends on | Consumed design | Scaffold work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | PLANNED | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
+| T1 | IN_PROGRESS | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
 | T2 | PLANNED | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
 | T3 | PLANNED | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
 
@@ -40,7 +40,7 @@ Each module has a purpose docstring. Each function/method has Inputs, Returns, E
 
 | Module | Declaration | Implementation responsibility |
 | --- | --- | --- |
-| `models.py` | `SourceRecord(source_file: str, source_record: int, values: dict[str, object])` | Parsed raw object with source location |
+| `models.py` | `SourceRecord(source_file: str, source_record: int, values: dict[str, object], input_format: Literal['csv', 'jsonl'] = 'jsonl')` | Parsed raw object with source location and format; format distinguishes CSV integer text from native JSON integers |
 | `models.py` | `ImportedPayout(source_file: str, source_record: int, payout_id: str, version: int, policy_id: str, settled_on: date, currency: str, amount_cents: int)` | Fixed target fields; database generates technical ID |
 | `models.py` | `RejectedRecord(source_file: str, source_record: int, reason: str)` | Row rejection diagnostic |
 | `models.py` | `PipelineResult(inserted: int, rejected: int)` | Counts for a successfully committed file; failures raise instead of returning success |
@@ -60,8 +60,8 @@ The fixed field conversion in transform.py is the mapping. Avoid generic schema/
 
 | Owner | Scenario | Current coverage / boundary |
 | --- | --- | --- |
-| T1 | Real fixture JSONL conversion; equivalent CSV records; malformed/non-object/blank JSONL; missing/null fields; strict dates and BIGINT integers including booleans and overflow | Planned focused unit tests |
-| T1 | Reordered/extra CSV columns, required headers, malformed framing, logical CSV record numbers, BOM and incremental iteration | Planned focused unit tests |
+| T1 | Real fixture JSONL conversion; equivalent CSV records; malformed/non-object/blank JSONL; missing/null fields; strict dates and BIGINT integers including booleans and overflow | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
+| T1 | Reordered/extra CSV columns, required headers, malformed framing, logical CSV record numbers, BOM and incremental iteration | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
 | T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Planned focused integration tests |
 | T2 | Bounded insert groups and final partial group; confirmed rollback after earlier insert; unknown commit truthfully propagated | Planned focused boundary and integration tests |
 | T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Planned focused integration tests |
@@ -76,11 +76,15 @@ Before final tests, complete the playbook implementation audit, retained reviews
 
 | Delivery outcome | Definition of Done | Current result |
 | --- | --- | --- |
-| File transformation | Complete typed readers and conversion with focused tests | Pending T1 |
+| File transformation | Complete typed readers and conversion with focused tests | Implemented; both-reviewer candidate review pending |
 | Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Pending T2 |
 | Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Pending T3 |
 | Merge candidate | Required review, exact-head validation and closing archive/reset | Pending final readiness and owner authority |
 
+## Task T1 result
+
+Implemented claims_data_lab models, errors, readers and transformation with the Python standard library. SourceRecord includes input_format metadata to distinguish CSV numeric strings from strict JSON native integers. No database, queue or CLI behavior is introduced. Python 3.14.5 focused test command `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` passed 18 tests. The tests use actual temporary files and tracked JSONL fixtures. PostgreSQL and end-to-end obligations remain owned by T2/T3.
+
 ## Human decision
 
-Accept the A1 implementation scope and revised task plan. Autopilot remains off, honoring the explicit instruction to stop after every completed task. Scope authorization to implement does not authorize automatic continuation between tasks or merge into main. The reviewed implementation audit and final validation gates remain separate.
+A1 and the revised plan were accepted in chat. Stop after T1 completes its focused checks and retained reviews. Resume T2 only on owner continuation. Autopilot is off; final audit/validation and protected-target merge remain separate decisions.
