@@ -29,9 +29,10 @@ def run_pipeline(
     """Import one file using bounded groups inside a writer-owned transaction.
 
     Supply an existing input file, its explicit format, a Psycopg connection
-    string and a positive integer batch_rows. reject_path must be a new file
-    in an existing directory: exclusive creation prevents accidental overwrite
-    of source files or earlier diagnostics. No credentials are logged.
+    string and a positive integer batch_rows. reject_path names a diagnostic
+    file in an existing directory. Diagnostics append to it across invocations.
+    The input file must be distinct from that output, including filesystem
+    aliases, to preserve source bytes. No credentials are logged.
 
     Expected row errors stream to reject_path as located JSONL diagnostics.
     The artifact is diagnostic and may survive a rolled-back import. Its flush
@@ -59,7 +60,11 @@ def run_pipeline(
                 stage = "create_table"
                 database.create_tables(connection)
                 stage = "open_reject_output"
-                with reject_path.open("x", encoding="utf-8") as rejects:
+                if input_path.resolve() == reject_path.resolve() or (
+                    reject_path.exists() and reject_path.samefile(input_path)
+                ):
+                    raise ValueError("Rejection output must be distinct from the input file")
+                with reject_path.open("a", encoding="utf-8") as rejects:
                     stage = "read"
                     for record in reader:
                         source_record = record.source_record

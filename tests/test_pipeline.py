@@ -130,7 +130,7 @@ class PostgreSQLPipelineTests(unittest.TestCase):
     def test_repeat_ids_and_file_reimports_append(self):
         path = self.write_jsonl([PAYOUT, {**PAYOUT, "version": -1}])
         self.load(path)
-        self.load(path, output="second-rejects.jsonl")
+        self.load(path)
         self.assertEqual([row[1] for row in self.stored()], [1, -1, 1, -1])
 
     def test_reader_and_conversion_rejections_continue_with_locations(self):
@@ -182,7 +182,7 @@ class PostgreSQLPipelineTests(unittest.TestCase):
 
         @contextmanager
         def failing_output():
-            with original_open(output, "x", encoding="utf-8") as file:
+            with original_open(output, "a", encoding="utf-8") as file:
                 writer = MagicMock(wraps=file)
                 writer.write.side_effect = OSError("simulated full disk")
                 yield writer
@@ -197,20 +197,38 @@ class PostgreSQLPipelineTests(unittest.TestCase):
                 self.load(path, batch_rows=1)
         self.assertEqual(self.stored(), before)
 
-    def test_existing_reject_file_is_preserved(self):
+    def test_existing_reject_file_is_preserved_and_appended(self):
         path = self.write_jsonl([PAYOUT])
         output = self.root / "rejects.jsonl"
-        output.write_text("earlier diagnostics", encoding="utf-8")
-        with self.assertRaises(FileExistsError):
-            self.load(path)
-        self.assertEqual(output.read_text(), "earlier diagnostics")
-        self.assertEqual(self.stored(), [])
+        previous = json.dumps({"source_file": "earlier", "source_record": 1, "reason": "earlier error"}) + "\n"
+        output.write_text(previous, encoding="utf-8")
+        self.assertEqual(self.load(path).inserted, 1)
+        self.assertEqual(output.read_text(), previous)
+        self.load(self.write_jsonl(["{bad"]))
+        rows = [json.loads(line) for line in output.read_text().splitlines()]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["reason"], "earlier error")
+        self.assertEqual(len(self.stored()), 1)
 
     def test_source_cannot_be_overwritten_by_reject_output(self):
         path = self.write_jsonl([PAYOUT])
         before = path.read_bytes()
-        with self.assertRaises(FileExistsError):
+        with self.assertRaisesRegex(ValueError, "distinct"):
             run_pipeline(path, "jsonl", self.url, path, 1)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.stored(), [])
+
+    def test_rejection_output_aliases_preserve_source(self):
+        path = self.write_jsonl([PAYOUT])
+        before = path.read_bytes()
+        for alias_type in ("symlink", "hardlink"):
+            alias = self.root / alias_type
+            if alias_type == "symlink":
+                alias.symlink_to(path)
+            else:
+                alias.hardlink_to(path)
+            with self.subTest(alias=alias_type), self.assertRaisesRegex(ValueError, "distinct"):
+                run_pipeline(path, "jsonl", self.url, alias, 1)
         self.assertEqual(path.read_bytes(), before)
         self.assertEqual(self.stored(), [])
 
