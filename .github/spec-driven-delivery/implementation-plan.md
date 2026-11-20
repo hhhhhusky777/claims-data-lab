@@ -62,9 +62,9 @@ The fixed field conversion in transform.py is the mapping. Avoid generic schema/
 | --- | --- | --- |
 | T1 | Real fixture JSONL conversion; equivalent CSV records; malformed/non-object/blank JSONL; missing/null fields; strict dates and BIGINT integers including booleans and overflow | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
 | T1 | Reordered/extra CSV columns, required headers, malformed framing, logical CSV record numbers, BOM and incremental iteration | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
-| T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Implemented in tests/test_pipeline.py; real PostgreSQL 16.8 integration passed |
+| T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Implemented in tests/test_pipeline.py; real PostgreSQL 16.14 integration passed |
 | T2 | Bounded insert groups and final partial group; confirmed rollback after earlier insert; unknown commit truthfully propagated | Implemented in tests/test_pipeline.py; 13 T2 tests passed, including simulated unknown-COMMIT propagation |
-| T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Implemented in tests/test_pipeline.py; real PostgreSQL 16.8 integration passed |
+| T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Implemented in tests/test_pipeline.py; real PostgreSQL 16.14 integration passed |
 | T3 | CLI options, DATABASE_URL handling, invalid batch_rows before inserts, redacted errors, committed counts | Planned focused CLI tests |
 | T3 | Both real input formats through CLI into PostgreSQL, expected values and reject locations | Planned end-to-end tests |
 
