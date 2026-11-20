@@ -7,8 +7,8 @@
 | Field | Value |
 | --- | --- |
 | State | `IN_PROGRESS` |
-| Active tasks | `None` — stopped after T1 as requested |
-| Next ready task | T2 — awaiting owner continuation |
+| Active tasks | T2 — focused checks passed; candidate review |
+| Next ready task | T3 after T2 completes and owner requests continuation |
 | Active blocker | None |
 | Implementation mode | human-review-before-merge; Autopilot off; stop after every completed task |
 | Delivery branch / target | `feature/phase1-transform` / `main` |
@@ -29,7 +29,7 @@ All tasks use `feature/phase1-transform`, PR #2, required target `main`, under o
 | ID | State | Depends on | Consumed design | Scaffold work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | T1 | DONE | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
-| T2 | PLANNED | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
+| T2 | IN_PROGRESS | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
 | T3 | PLANNED | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
 
 After each task passes its focused checks and both retained reviewers approve its exact candidate, mark it DONE and stop. The owner chooses when to continue. Do not start a dependent task automatically.
@@ -62,9 +62,9 @@ The fixed field conversion in transform.py is the mapping. Avoid generic schema/
 | --- | --- | --- |
 | T1 | Real fixture JSONL conversion; equivalent CSV records; malformed/non-object/blank JSONL; missing/null fields; strict dates and BIGINT integers including booleans and overflow | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
 | T1 | Reordered/extra CSV columns, required headers, malformed framing, logical CSV record numbers, BOM and incremental iteration | Implemented in tests/test_transformation.py; 18 tests passed on Python 3.14.5 |
-| T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Planned focused integration tests |
-| T2 | Bounded insert groups and final partial group; confirmed rollback after earlier insert; unknown commit truthfully propagated | Planned focused boundary and integration tests |
-| T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Planned focused integration tests |
+| T2 | Actual PostgreSQL schema and inserted values; repeated IDs/reimport append; opaque version values | Implemented in tests/test_pipeline.py; real PostgreSQL 16.8 integration passed |
+| T2 | Bounded insert groups and final partial group; confirmed rollback after earlier insert; unknown commit truthfully propagated | Implemented in tests/test_pipeline.py; 13 T2 tests passed, including simulated unknown-COMMIT propagation |
+| T2 | Rejection output remains diagnostic; output/read failure aborts file transaction | Implemented in tests/test_pipeline.py; real PostgreSQL 16.8 integration passed |
 | T3 | CLI options, DATABASE_URL handling, invalid batch_rows before inserts, redacted errors, committed counts | Planned focused CLI tests |
 | T3 | Both real input formats through CLI into PostgreSQL, expected values and reject locations | Planned end-to-end tests |
 
@@ -77,7 +77,7 @@ Before final tests, complete the playbook implementation audit, retained reviews
 | Delivery outcome | Definition of Done | Current result |
 | --- | --- | --- |
 | File transformation | Complete typed readers and conversion with focused tests | Implemented; 18 focused tests passed; both retained reviewers approved T1 candidate 42e52d6 |
-| Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Pending T2 |
+| Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Implemented; 13 T2 focused tests passed; review pending |
 | Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Pending T3 |
 | Merge candidate | Required review, exact-head validation and closing archive/reset | Pending final readiness and owner authority |
 
@@ -85,6 +85,14 @@ Before final tests, complete the playbook implementation audit, retained reviews
 
 Implemented claims_data_lab models, errors, readers and transformation with the Python standard library. SourceRecord includes input_format metadata to distinguish CSV numeric strings from strict JSON native integers. Both retained reviewers approved exact T1 candidate 42e52d6 with no findings and independently passed all 18 tests. Task T1 is DONE; execution stops until owner continuation. No database, queue or CLI behavior is introduced. Python 3.14.5 focused test command `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v` passed 18 tests. The tests use actual temporary files and tracked JSONL fixtures. PostgreSQL and end-to-end obligations remain owned by T2/T3.
 
+## Task T2 result
+
+Implemented database.py (fixed table schema, writer-owned transaction, parameterized executemany groups) and pipeline.py (incremental orchestration, rejection JSONL and committed counts). Dependencies are pinned in requirements.txt. run_pipeline takes an explicit batch_rows with no default; rejection paths are new files opened exclusively, preserving inputs and earlier diagnostics. This uses existing fatal-output handling FC1 rather than overwriting files.
+
+Thirteen T2 focused tests passed against a dedicated PostgreSQL 16-alpine container with private per-test schemas. Test entry point: `TEST_DATABASE_URL=<isolated-test-url> PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p test_pipeline.py -v`. Reuse the pinned requirements in a virtual environment. Integration tests are explicitly skipped when TEST_DATABASE_URL is absent. Confirm that the supplied database is a disposable local test instance before using it. Real database evidence covers typed CSV/JSONL inserts, bounded/final groups, append-on-repeat, rejection locations, confirmed rollback after framing/database/output failures and safe output-file creation. Unknown-COMMIT identity and retry behavior are tested with an isolated simulated driver failure; no real network fault is claimed.
+
+The verification container is owned by this task with labels codex.project=claims-data-lab and codex.task=T2; it reuses the cached postgres:16-alpine image. Unrelated environments are outside its scope. Product README and manifest contract reconciliation remain T3 obligations and currently contain superseded reporting instructions.
+
 ## Human decision
 
-A1 and the revised plan were accepted in chat. Stop after T1 completes its focused checks and retained reviews. Resume T2 only on owner continuation. Autopilot is off; final audit/validation and protected-target merge remain separate decisions.
+A1 and the revised plan were accepted in chat. Stop after T1 completes its focused checks and retained reviews. T2 continuation was explicitly authorized in chat. Stop after its focused checks and retained reviews; resume T3 only on owner continuation. Autopilot is off; final audit/validation and protected-target merge remain separate decisions.
