@@ -158,6 +158,8 @@ Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI an
 
 ## Performance Goals and Evidence
 
+The accepted starting synthetic benchmark profile is 100,000 and 1,000,000 rows, 500-row groups, three runs per size, one importer and one isolated PostgreSQL instance. Throughput and peak memory are measured before improvement targets are set. Dataset shape and runtime-resource configuration belong to the Phase 2 design. See [the Spark experiment](https://github.com/hhhhhusky777/claims-data-lab/issues/4).
+
 The repository owner approves workload boundaries and performance goals. Small fixtures establish correctness and provide no capacity or latency claim. No numeric performance target has been accepted.
 
 Before optimization, agree on row counts, record sizes, key distribution, batch sizes, concurrency and available client/database resources. Add a repeatable benchmark command with seed and parameters. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
