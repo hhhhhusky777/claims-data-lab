@@ -252,6 +252,8 @@ RUN_SPARK_TESTS=1 TEST_DATABASE_URL="$DATABASE_URL" \
 
 Start reading `pipeline.py` for the shared writer, `spark_transform.py` for staging/materialization/driver iteration, and `transform.py` for the pure conversion boundary. Worker/task failures are tested as fatal; tests also cover multiline/native-type parity, append behavior, owned cleanup and rollback after an earlier insert group. Native event timing proves overlapping local tasks; it is not a production throughput claim.
 
+The pinned SDK can emit socket ResourceWarnings during collection/iteration. Its source relies on garbage collection for those sockets; see the related [Apache issue](https://issues.apache.org/jira/browse/SPARK-54247). Tests retain these warnings. Application-owned iterator/cache/context/temp cleanup is verified, while sustained resource stability is unmeasured.
+
 ## Phase 3 — Extend coverage
 
 Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
