@@ -132,7 +132,7 @@ class MeasurementTests(unittest.TestCase):
                 connection = connect.return_value.__enter__.return_value
                 connection.execute.side_effect = [None, original]
                 with self.assertRaises(OSError) as raised:
-                    run_benchmark_import("unused", workload, "csv", root / "cleanup-run")
+                    run_benchmark_import("dbname=unused", workload, "csv", root / "cleanup-run")
             self.assertIs(raised.exception, original)
             retained = json.loads((root / "cleanup-run" / "observation.json").read_text())
             self.assertEqual(retained["failed_stage"], "schema_cleanup")
