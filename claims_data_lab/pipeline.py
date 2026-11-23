@@ -12,6 +12,7 @@ import psycopg
 from . import database
 from .errors import RowValidationError
 from .models import ImportedPayout, PipelineResult, RejectedRecord
+from .measurements import ImportMeasurements
 from .readers import read_csv, read_jsonl
 from .transform import transform_record
 
@@ -25,6 +26,8 @@ def run_pipeline(
     database_url: str,
     reject_path: Path,
     batch_rows: int,
+    *,
+    measurements: ImportMeasurements | None = None,
 ) -> PipelineResult:
     """Import one file using bounded groups inside a writer-owned transaction.
 
@@ -39,6 +42,9 @@ def run_pipeline(
     and close happen before database commit, so output failures abort the file.
     Each successful run appends rows, including reimports of the same file.
 
+    Optional measurements aggregate read/transform/insert and connection/transaction
+    timings for benchmarks. Omitted measurements retain the existing path.
+
     Returns committed inserted/rejected counts only after successful commit.
     Fatal read, output and database exceptions propagate with stage/location
     notes and original causes, with no automatic retry. Confirm database state
@@ -49,14 +55,25 @@ def run_pipeline(
         raise ValueError("batch_rows must be a positive integer")
     readers = {"csv": read_csv, "jsonl": read_jsonl}
     reader = readers[input_format](input_path)
+    if measurements is not None:
+        reader = measurements.iterate("read", reader)
+    transform = transform_record if measurements is None else (
+        lambda record: measurements.call("transform", transform_record, record)
+    )
+    insert = database.insert_batch if measurements is None else (
+        lambda connection, records: measurements.call("insert", database.insert_batch, connection, records)
+    )
+    log = logger if measurements is None else logging.LoggerAdapter(logger, {"run_id": measurements.run_id})
     inserted = rejected = 0
     batch: list[ImportedPayout] = []
     stage = "connect"
     source_record = None
 
     try:
-        with closing(reader), psycopg.connect(database_url, autocommit=True) as connection:
-            with database.transaction(connection):
+        connect = lambda: psycopg.connect(database_url, autocommit=True)
+        with closing(reader), (connect() if measurements is None else measurements.call("connect", connect)) as connection:
+            transaction = database.transaction(connection) if measurements is None else database.transaction(connection, measurements=measurements)
+            with transaction:
                 stage = "create_table"
                 database.create_tables(connection)
                 stage = "open_reject_output"
@@ -73,7 +90,7 @@ def run_pipeline(
                         else:
                             stage = "transform"
                             try:
-                                payout = transform_record(record)
+                                payout = transform(record)
                             except RowValidationError as error:
                                 rejection = RejectedRecord(
                                     record.source_file, record.source_record, str(error)
@@ -82,7 +99,7 @@ def run_pipeline(
                                 batch.append(payout)
                                 if len(batch) == batch_rows:
                                     stage = "insert_batch"
-                                    inserted += database.insert_batch(connection, batch)
+                                    inserted += insert(connection, batch)
                                     batch.clear()
                                 stage = "read"
                                 continue
@@ -94,7 +111,7 @@ def run_pipeline(
 
                     if batch:
                         stage = "insert_final_batch"
-                        inserted += database.insert_batch(connection, batch)
+                        inserted += insert(connection, batch)
                     stage = "close_reject_output"
                 stage = "commit"
             stage = "close_connection"
@@ -103,11 +120,11 @@ def run_pipeline(
             f"Import stage={stage}, source={input_path}, last_record={source_record}. "
             "A rejection artifact may exist even when the database import failed."
         )
-        logger.error(
+        log.error(
             "Import failed: stage=%s source=%s last_record=%s error_type=%s",
             stage, input_path, source_record, type(error).__name__,
         )
         raise
 
-    logger.info("Import committed: source=%s inserted=%d rejected=%d", input_path, inserted, rejected)
+    log.info("Import committed: source=%s inserted=%d rejected=%d", input_path, inserted, rejected)
     return PipelineResult(inserted=inserted, rejected=rejected)

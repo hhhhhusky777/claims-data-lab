@@ -131,6 +131,57 @@ TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests
 
 Do not interpret skipped integration cases as PostgreSQL evidence. Review results and the current validation boundary in [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2).
 
+## Phase 2 — Sequential benchmark (T1)
+
+The optional benchmark tooling uses Python 3.12.9 and pinned dependencies in `requirements-benchmark.txt`. It keeps the sequential import algorithm and 500-row groups. Install with your configured package mirror and persistent cache:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-benchmark.txt
+```
+
+Use a separate disposable PostgreSQL container. Reuse a cached image where available; preflight any required image download under your host's download rules. The accepted local profile limits this database to one CPU and 1 GiB memory. The benchmark creates and drops only its own private schemas, and never starts or stops containers itself.
+
+```sh
+docker run --pull=never --name claims-data-lab-benchmark -d \
+  --label codex.project=claims-data-lab --label codex.task=phase2-baseline \
+  --cpus 1 --memory 1g \
+  -e POSTGRES_USER=claims -e POSTGRES_PASSWORD=claims_local_demo -e POSTGRES_DB=claims \
+  -p 127.0.0.1:55433:5432 postgres:16-alpine
+
+docker exec claims-data-lab-benchmark pg_isready -U claims -d claims
+export DATABASE_URL='postgresql://claims:claims_local_demo@127.0.0.1:55433/claims'
+export BENCHMARK_CONTAINER=claims-data-lab-benchmark
+.venv/bin/python -m claims_data_lab.benchmark
+```
+
+Wait for database readiness before starting. One invocation generates equivalent 100,000- and 1,000,000-row CSV/JSONL files, performs one small unmeasured warm-up per format, then runs three measured imports per size/format (12 measured imports). Each import uses a fresh Python process and private schema. The workload repeats payout IDs every 50,000 rows and includes signed amounts. Its seed is 42; it injects no invalid records into throughput runs. Generation is incremental and uses real files.
+
+The printed `artifacts/phase2-baseline/<invocation>/` directory contains:
+
+| File | Meaning |
+| --- | --- |
+| `environment.json` | Commit/dirty state, Python/dependency versions, host capacity, database settings and optional Docker limits/image ID; no connection string |
+| `workloads.json` | Seed, row counts, paths, exact byte sizes and SHA-256 hashes |
+| `runs.jsonl` | Every measured result, including failures, commands, counts, full-column verification and sampled memory |
+| `summary.json` | Successful-run median/range plus passed/total counts; failed imports have no successful throughput |
+| Per-run directory | Nonsecret worker configuration, stdout JSON, correlated stage logs and rejection diagnostics |
+
+The supervisor measures process launch through observed exit. Generation, schema setup/cleanup and post-run correctness queries are outside that interval. Polling at 100 ms may add up to one sample interval to observed elapsed time. Worker timers expose read, transform, SQL insert, connection, transaction begin/commit/rollback and whole-pipeline seconds. The residual process interval includes interpreter/module startup, shutdown and polling; it is not pure startup time. Stage intervals can nest, so do not add all timers together.
+
+Memory is the maximum sampled sum of importer/descendant RSS, not an exact peak or unique physical footprint: samples can miss short peaks/children and count shared pages twice. Permission failures and exit races are retained in sampling notes. `BENCHMARK_CONTAINER` adds separate before/after database memory snapshots outside the timed interval; these are not database peaks. OS/database cache warmth is uncontrolled and disclosed. Instruments add overhead, and results describe this instrumented workload and host only.
+
+After each run, an independent SQL expression checks every stored column, source location and expected multiplicity against the accepted formula. Row counts alone are insufficient. Verification is outside the import timing. Generated datasets/results remain ignored; retain sanitized evidence in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). Spark and comparative measurements belong to later tasks.
+
+```sh
+# Focused benchmark tests; database cases skip unless explicitly enabled.
+TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests -p test_benchmark.py -v
+
+# After the owned benchmark environment is no longer needed:
+docker stop claims-data-lab-benchmark
+docker rm -v claims-data-lab-benchmark
+```
+
 ## Definition of Done
 
 - Both input formats produce the known column values and committed counts in PostgreSQL.
@@ -162,7 +213,7 @@ The accepted starting synthetic benchmark profile is 100,000 and 1,000,000 rows,
 
 The repository owner approves workload boundaries and performance goals. Small fixtures establish correctness and provide no capacity or latency claim. No numeric performance target has been accepted.
 
-Before optimization, agree on row counts, record sizes, key distribution, batch sizes, concurrency and available client/database resources. Add a repeatable benchmark command with seed and parameters. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
+The accepted T1 workload uses the deterministic formula in `workloads.py`: T(i mod 50000), version 1+(i mod 5), P(i mod 10000), date 2026-11-18, USD and amount ((i*7919+42) mod 200001)-100000 for zero-based i. Run `python -m claims_data_lab.benchmark` using Python 3.12.9, Psycopg 3.3.2, psutil 7.2.2, one importer and a one-CPU/1-GiB PostgreSQL container. Generated file metadata supplies exact record/file sizes. The command, measurement intervals, correctness checks and interpretation limits are documented above. Revise the accepted profile before changing these workload/resource conditions. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
 
 ## Delivery playbook setup
 
