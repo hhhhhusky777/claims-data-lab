@@ -4,17 +4,17 @@
 
 | Field | Value |
 | --- | --- |
-| State | `DISCUSSION` |
+| State | `CONCLUDED` |
 | Need / issue | [Issue #4](https://github.com/hhhhhusky777/claims-data-lab/issues/4) |
 | Owner | Repository owner hhhhhusky777 |
-| Concluded design revision | `None` |
-| Open owner decisions | Accept proposed D1–D6, bounded workload/resources and V1/FC1 after independent review |
+| Concluded design revision | `223fbcfbb33b38fc0c589b340e4c9a25ed7f08cf`; owner accepted 2026-11-24 |
+| Open owner decisions | `None`; D1–D6, workload/resources and V1/FC1 accepted |
 
 ## Discussion draft
 
 | ID | Agreed item, alternative, constraint, or gap | State / resolution |
 | --- | --- | --- |
-| DR1 | Owner selected Spark transformation first, retaining the PostgreSQL writer | D1; proposed |
+| DR1 | Owner selected Spark transformation first, retaining the PostgreSQL writer | D1; accepted |
 | DR2 | Accepted 100k/1M rows, 500-row groups and three repeats; dataset/resource details were open | D5 supplies proposed bounded assumptions, without a speed target |
 | DR3 | CSV multiline framing and JSON native types/source numbers must survive distribution | D2 reuses readers and stages located records; native Spark parsing deferred |
 | DR4 | Driver iteration alone does not prove concurrent transformation | D3 materializes disk-persisted results in parallel before driver iteration |
@@ -140,14 +140,14 @@ Existing input, type, reject-alias and transaction validations remain in the Pha
 
 | ID | Validation, owning authority, and execution boundary | Protected outcome / risk and marginal value beyond existing controls | Concrete invalid case | Failure effect / recovery | Cost / risk reduction | Existing/reusable or cheaper mechanism, its coverage, and why insufficient | Fail-close / test reference | Owner disposition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| V1 | D1 engine selector; CLI argparse boundary, before import | Prevent ambiguous engine selection; default remains sequential | --engine sparkk | Exit 2 before import; operator corrects to sequential or spark and reruns | One argparse choices declaration; no new dependency | Reuse existing argparse validation; Phase 1 has no engine selector, so add only its two choices | FC1; CLI engine test | Pending |
+| V1 | D1 engine selector; CLI argparse boundary, before import | Prevent ambiguous engine selection; default remains sequential | --engine sparkk | Exit 2 before import; operator corrects to sequential or spark and reruns | One argparse choices declaration; no new dependency | Reuse existing argparse validation; Phase 1 has no engine selector, so add only its two choices | FC1; CLI engine test | Approved |
 
 ## Newly introduced fail-closed behaviors
 
 | ID | Trigger | Required fail-closed response | Concrete example | Impact | Recovery / best next action | Owner disposition |
 | --- | --- | --- | --- | --- | --- | --- |
-| FC1 | Engine value outside sequential/spark | Existing CLI argument-error exit 2 before import | --engine sparkk does not start a database import | No input or DB changes | Operator corrects the value and reruns; no data reconciliation needed | Pending |
+| FC1 | Engine value outside sequential/spark | Existing CLI argument-error exit 2 before import | --engine sparkk does not start a database import | No input or DB changes | Operator corrects the value and reruns; no data reconciliation needed | Approved |
 
 ## Draft-to-conclusion reconciliation
 
-Not concluded. DR1–DR5 map to proposed D1–D6 above; no implementation plan or product changes are authorized by this discussion document alone. Owner acceptance and independent review must precede the metadata-only freeze transition.
+Concluded after owner acceptance on 2026-11-24. DR1–DR5 map to accepted D1–D6 above; no implementation plan or product changes are authorized by this design document alone. Both independent reviewers approved candidate 223fbcf; this metadata-only conclusion transition requires their exact-commit verification before planning.
