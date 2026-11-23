@@ -108,3 +108,76 @@ Implemented cli.py and __main__.py, the equivalent CSV payout fixture, local set
 Focused command: `TEST_DATABASE_URL=<isolated-test-url> PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p test_cli.py -v`. Both retained reviewers approved exact task candidate 524935a with no findings and independently reran all ten focused tests. Task T3 is DONE; stop before final feature readiness. Ten T3 tests passed on Python 3.14.5 with Psycopg 3.3.2 against a task-owned PostgreSQL 16-alpine container, including four subprocess-to-database cases. Unit cases verify parser behavior, missing credentials, committed-count output and redaction. Subprocess cases verify both actual fixture formats, rejects, fatal rollback and argument rejection before database effects. Relative links and whitespace checks passed. Final feature validation has not run; the owner’s requested task stop precedes final readiness and archive/reset.
 
 The task-owned T3 verification container and anonymous data volume are removed after review. Dependencies remain in the existing virtual environment for reuse. No final audit, full-suite result, archive/reset or merge readiness is claimed at this task stop.
+
+## Implementation review
+
+| Information | Implementation summary / evidence |
+| --- | --- |
+| Implementation / design | D1–D7 implemented across models/readers/transform, database/pipeline and CLI. Fixed mapping, opaque version payload and plain append preserved. Writer owns one file transaction with parameterized executemany groups. T1/T2/T3 task reviews approved the exact task candidates recorded above. |
+| Code-level flows | Business sequence, data flow and error activity below describe current cli.py, pipeline.py, readers.py, transform.py and database.py. |
+| Review findings | Task review found the unnecessary exclusive rejection-output rule; it was removed in 15bcc4a and both reviewers approved append behavior plus source protection. Final combined audit findings belong in PR #2. |
+| Risks / limits / unknowns | Largest-record size is unbounded; batch_rows limits record count. File transactions may be large. No schema migrations, deduplication, update semantics, parallel pipeline, Spark or performance target. Unknown COMMIT uses a driver simulation in tests, not a real network fault. Rejection artifacts can survive rollback. |
+| Validation | Task-focused results: 18 T1, 14 T2 and 10 T3 cases passed at their recorded candidates. No combined final suite has run. Exact-head full validation waits for human implementation acceptance. No new product changes in this audit preparation. |
+| Recommendation / decision | Review the combined implementation, then request human implementation acceptance to begin final validation. Protected-target merge and closure remain later explicit boundaries. |
+
+### Business sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI
+    participant Pipeline
+    participant ReaderTransform as Reader and transformer
+    participant PG as PostgreSQL
+    User->>CLI: Input, format, batch size and rejects path
+    CLI->>Pipeline: run_pipeline with DATABASE_URL
+    Pipeline->>PG: Begin file transaction and ensure table
+    loop Incremental records and bounded groups
+        Pipeline->>ReaderTransform: Read and convert next record
+        ReaderTransform-->>Pipeline: Typed payout or row rejection
+        Pipeline->>PG: Insert accepted full groups
+    end
+    Pipeline->>PG: Insert final group and commit
+    Pipeline-->>CLI: Committed inserted/rejected counts
+    CLI-->>User: JSON result and exit 0
+```
+
+### Data flow
+
+```mermaid
+flowchart LR
+    F[CSV or JSONL file] --> R[read_csv or read_jsonl]
+    R --> S[SourceRecord]
+    S --> T[transform_record]
+    T --> P[ImportedPayout batch]
+    P --> W[insert_batch and SQL parameters]
+    W --> DB[(imported_payouts)]
+    R --> E[RejectedRecord]
+    T --> E
+    E --> J[Appended diagnostic JSONL]
+```
+
+### Error activity
+
+```mermaid
+flowchart TD
+    N[Read next record] --> O{Outcome}
+    O -->|Valid| B[Buffer and insert groups]
+    B --> N
+    O -->|Expected row error| R[Append located rejection]
+    R --> N
+    O -->|End of input| C[Flush final group and close output]
+    C --> M[Commit file transaction]
+    M --> S[Return committed counts]
+    O -->|Fatal read failure| X[Abort and transaction rollback]
+    B -->|Database error| X
+    R -->|Output error| X
+    C -->|Output close error| X
+    X --> E[Preserve cause and report failure]
+    M -->|Connection lost during commit| U[Report failure with unknown commit possibility]
+    U --> Q[Operator inspects PostgreSQL before retry]
+```
+
+## Phase 2 handoff
+
+The owner selected a starting benchmark profile on 2026-11-23: 100,000 and 1,000,000 synthetic rows, 500-row groups, three runs per size, one importer and one isolated local PostgreSQL instance, measuring throughput and peak memory before setting improvement targets. [Issue #3](https://github.com/hhhhhusky777/claims-data-lab/issues/3) records this agreement. Phase 2 starts with a reproducible sequential baseline; data-shape/resource details and a normal Phase 2 design remain to be recorded. No Phase 2 product code or benchmark run has begun. This handoff does not alter the frozen Phase 1 design.
