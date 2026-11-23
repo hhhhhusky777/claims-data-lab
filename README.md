@@ -173,6 +173,8 @@ Memory is the maximum sampled sum of importer/descendant RSS, not an exact peak 
 
 After each run, an independent SQL expression checks every stored column, source location and expected multiplicity against the accepted formula. Row counts alone are insufficient. Verification is outside the import timing. Generated datasets/results remain ignored; retain sanitized evidence in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). Spark and comparative measurements belong to later tasks.
 
+Read the T1 code in this order: `workloads.py` generates real files; `benchmark.py` supervises runs and verifies stored values; `benchmark_worker.py` launches the measured import; `measurements.py` aggregates optional timers used by `pipeline.py` and `database.py`.
+
 ```sh
 # Focused benchmark tests; database cases skip unless explicitly enabled.
 TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests -p test_benchmark.py -v
