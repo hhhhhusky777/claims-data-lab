@@ -16,6 +16,7 @@ class ImportMeasurements:
 
     def __init__(self, run_id: str):
         self.run_id = run_id
+        self.details = {}
         self.seconds = defaultdict(float)
         self.calls = defaultdict(int)
         self.logger = logging.LoggerAdapter(logging.getLogger(__name__), {"run_id": run_id})
@@ -54,7 +55,7 @@ class ImportMeasurements:
 
     def snapshot(self) -> dict:
         """Return JSON-compatible aggregate evidence correlated to this run."""
-        return {"run_id": self.run_id, "stage_seconds": dict(self.seconds), "stage_calls": dict(self.calls)}
+        return {"run_id": self.run_id, "stage_seconds": dict(self.seconds), "stage_calls": dict(self.calls), "details": self.details}
 
     def log_summary(self) -> None:
         """Emit one aggregate record through shared logging handlers."""

@@ -40,13 +40,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--format", choices=("csv", "jsonl"), required=True, help="Input file format")
     parser.add_argument("--rejects", type=Path, required=True, help="Diagnostic JSONL path; appended across runs")
     parser.add_argument("--batch-rows", type=_positive_integer, required=True, help="Maximum records per insert group")
+    parser.add_argument("--engine", choices=("sequential", "spark"), default="sequential", help="Transformation engine; default requires no Spark")
     args = parser.parse_args(argv)
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         parser.error("set DATABASE_URL to a local development PostgreSQL connection string")
 
     try:
-        result = run_pipeline(args.input, args.format, database_url, args.rejects, args.batch_rows)
+        options = {"engine": "spark"} if args.engine == "spark" else {}
+        result = run_pipeline(args.input, args.format, database_url, args.rejects, args.batch_rows, **options)
     except Exception as error:
         print(
             f"Import failed ({type(error).__name__}). Check the pipeline stage log. "

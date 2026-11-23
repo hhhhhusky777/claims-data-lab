@@ -205,6 +205,53 @@ docker rm -v claims-data-lab-dev
 
 Measure the working import baseline before changing it. Candidate experiments include PostgreSQL COPY, [bounded pipeline parallelism](https://github.com/hhhhhusky777/claims-data-lab/issues/3), and the same transformation in PySpark. Compare output correctness, end-to-end throughput, stage costs and memory on identical workloads. Spark can distribute transformation, while destination loading can remain a bottleneck.
 
+## Spark transformation engine (T2)
+
+The optional `--engine spark` path uses classic PySpark 4.0.4 with Python 3.12.9 and Java 17. The verified Java build for this experiment is Temurin 17.0.21.1+2 on macOS ARM64. Install from an existing persistent cache or a verified source following host download rules; PySpark's source distribution is about 434 MB. The ordinary sequential command needs neither Java nor PySpark.
+
+```sh
+.venv/bin/python -m pip install -r requirements-spark.txt
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+```
+
+For an unpacked Java archive, set `JAVA_HOME` to its `Contents/Home` directory instead. This workspace keeps its checksum-verified runtime at `../claims-runtime-cache/java17/jdk-17.0.21.1+2/Contents/Home`. The official [Temurin archive](https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21.1%2B2/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.21.1_2.tar.gz) SHA-256 is `2a88ccb044a8fb00957be93245da6357c11b55717511509d147cbcc5d93b2109`. The pinned PySpark source SHA-256 is `7e119366364d48e3cda1b1efd1ebc6cd672949500667c9cabbeef858daba700f`. Keep archives/caches outside Git; no host-wide Java installation is required when using an unpacked archive.
+
+With the existing local PostgreSQL setup and DATABASE_URL:
+
+```sh
+.venv/bin/python -m claims_data_lab \
+  --input fixtures/payouts/2026-11-18.jsonl --format jsonl \
+  --batch-rows 500 --rejects artifacts/spark-rejects.jsonl --engine spark
+```
+
+Expected stdout is `{"inserted": 3, "rejected": 0}` after commit. Spark diagnostics use stderr. The Python API accepts `run_pipeline(..., engine="spark")`; existing calls and an omitted option remain sequential. A missing runtime is a fatal import error, with no automatic fallback or retry.
+
+```text
+Existing CSV/JSONL reader (serial)
+  → temporary JSONL envelopes retaining source location and native values
+  → Spark textFile partitions, local[2], eight requested partitions
+  → pure mapPartitions calls to the existing converter
+  → DISK_ONLY outcomes, fully materialized before database loading
+  → driver iterator without prefetch
+  → shared Psycopg groups and one file transaction
+```
+
+The reader still owns quoted multiline CSV, BOM handling and JSONL physical line numbers. This experiment parallelizes conversion, while input parsing/staging and database loading remain driver responsibilities. Workers never receive database URLs or write rejection files. The driver restores its environment after sanitizing credentials from the launched Spark processes. One importer per Python process is supported; each call creates/stops its own SparkContext, and the SDK rejects a second concurrent context. The driver and workers use the same Python executable.
+
+The driver opens the file transaction before staging; fatal staging, worker, transfer, rejection-output or database errors roll it back. Expected row errors keep the same source locations and reasons. All cached outcomes and temporary envelope/package/cache files are cleaned before commit. Cleanup failures preserve an existing primary error. Diagnostic rejection order and generated identity IDs are not comparison keys; duplicate values remain separate appended rows.
+
+Spark is configured for two local task slots, a 1 GiB driver heap and loopback driver RPC, with its UI disabled. The heap setting excludes Python workers/native memory. DISK_ONLY avoids keeping all outcomes in the Python driver, but iteration can require the largest partition, and a single large record can still consume substantial memory. This local setup does not prove multi-machine operation; a cluster would require shared storage and separately verified packaging/security.
+
+Native event logs remain under ignored `artifacts/spark-events/<invocation>/`. Optional ImportMeasurements snapshots retain partition row counts, summed individually pickled-row bytes and native task launch/finish evidence. Those serialized-byte sums exclude Spark framing and object/JVM overhead. The implementation collects only one small metadata item per partition, never the full dataset. Startup, staging, materialization and partition-summary timing are separate; SQL time nests inside driver consumption. T3 reruns both engines for the formal performance comparison after this refactor.
+
+```sh
+# Run actual Spark/PostgreSQL task checks; runtime and database must be available.
+RUN_SPARK_TESTS=1 TEST_DATABASE_URL="$DATABASE_URL" \
+  .venv/bin/python -m unittest discover -s tests -p test_spark_transform.py -v
+```
+
+Start reading `pipeline.py` for the shared writer, `spark_transform.py` for staging/materialization/driver iteration, and `transform.py` for the pure conversion boundary. Worker/task failures are tested as fatal; tests also cover multiline/native-type parity, append behavior, owned cleanup and rollback after an earlier insert group. Native event timing proves overlapping local tasks; it is not a production throughput claim.
+
 ## Phase 3 — Extend coverage
 
 Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
