@@ -109,8 +109,6 @@ def run_pipeline(
     """
     if type(batch_rows) is not int or batch_rows <= 0:
         raise ValueError("batch_rows must be a positive integer")
-    if engine not in ("sequential", "spark"):
-        raise ValueError("engine must be sequential or spark")
     reader = {"csv": read_csv, "jsonl": read_jsonl}[input_format](input_path)
     progress = ImportProgress()
     log = logger if measurements is None else logging.LoggerAdapter(logger, {"run_id": measurements.run_id})
