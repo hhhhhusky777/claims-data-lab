@@ -12,7 +12,7 @@ from unittest.mock import patch
 import psycopg
 
 from claims_data_lab.benchmark import (
-    observe_import, private_schema, run_benchmark_import, sample_process_tree, summarize, verify_workload,
+    container_memory_snapshot, main, observe_import, private_schema, run_benchmark_import, sample_process_tree, summarize, verify_workload,
 )
 from claims_data_lab.measurements import ImportMeasurements
 from claims_data_lab.pipeline import run_pipeline
@@ -113,6 +113,47 @@ class MeasurementTests(unittest.TestCase):
             process.return_value.children.side_effect = PermissionError("blocked")
             self.assertEqual(sample_process_tree(123), (None, ["PermissionError"]))
 
+    def test_optional_snapshot_failure_is_unavailable(self):
+        with patch.dict(os.environ, {"BENCHMARK_CONTAINER": "owned"}), patch(
+            "claims_data_lab.benchmark.subprocess.run", side_effect=FileNotFoundError("docker")):
+            self.assertEqual(container_memory_snapshot(), {"state": "unavailable", "error_type": "FileNotFoundError"})
+
+    def test_cleanup_failure_keeps_completed_observation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workload = generate_workload(root / "input", 3)
+            original = OSError("cleanup unavailable")
+            completed = {"returncode": 0, "process_seconds": 1.25, "sampled_process_tree_rss_bytes": 123,
+                         "import": {"inserted": 3, "rejected": 0}}
+            with patch.dict(os.environ, {"BENCHMARK_CONTAINER": ""}), patch(
+                "claims_data_lab.benchmark.psycopg.connect") as connect, patch(
+                "claims_data_lab.benchmark.observe_import", return_value=completed), patch(
+                "claims_data_lab.benchmark.verify_workload", return_value={"valid": True}):
+                connection = connect.return_value.__enter__.return_value
+                connection.execute.side_effect = [None, original]
+                with self.assertRaises(OSError) as raised:
+                    run_benchmark_import("unused", workload, "csv", root / "cleanup-run")
+            self.assertIs(raised.exception, original)
+            retained = json.loads((root / "cleanup-run" / "observation.json").read_text())
+            self.assertEqual(retained["failed_stage"], "schema_cleanup")
+            self.assertEqual(retained["process_seconds"], 1.25)
+            self.assertEqual(retained["sampled_process_tree_rss_bytes"], 123)
+            self.assertIsNone(retained["accepted_rows_per_second"])
+
+    def test_main_report_retains_failed_observation_before_stopping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = OSError("verification unavailable")
+            original.benchmark_observation = {"run_id": "failed-run", "status": "failed", "failed_stage": "verification", "process_seconds": 1.5}
+            with patch.dict(os.environ, {"DATABASE_URL": "unused"}), patch(
+                "claims_data_lab.benchmark.Path", return_value=root), patch(
+                "claims_data_lab.benchmark.environment_evidence", return_value={}), patch(
+                "claims_data_lab.benchmark.generate_workload", return_value={"rows": 100000}), patch(
+                "claims_data_lab.benchmark.run_benchmark_import", side_effect=[{"status": "passed"}, {"status": "passed"}, original]):
+                self.assertEqual(main(), 1)
+            report = next(root.glob("*/runs.jsonl"))
+            self.assertEqual(json.loads(report.read_text()), original.benchmark_observation)
+
     def test_summary_preserves_failures_and_all_successful_rates(self):
         rows = [{"rows": 100000, "format": "csv", "status": "passed", "accepted_rows_per_second": n} for n in [10, 30]]
         rows.append({"rows": 100000, "format": "csv", "status": "failed", "accepted_rows_per_second": None})
@@ -164,6 +205,25 @@ class BenchmarkPostgreSQLTests(unittest.TestCase):
             self.assertEqual(measurements.calls["rollback"], 1)
             with psycopg.connect(url) as connection:
                 self.assertIsNone(connection.execute("SELECT to_regclass('imported_payouts')").fetchone()[0])
+
+    def test_verification_failure_retains_measured_observation_and_original_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workload = generate_workload(root / "input", 3)
+            original = OSError("verification unavailable")
+            with patch.dict(os.environ, {"BENCHMARK_CONTAINER": ""}), patch(
+                "claims_data_lab.benchmark.verify_workload", side_effect=original):
+                with self.assertRaises(OSError) as raised:
+                    run_benchmark_import(os.environ["TEST_DATABASE_URL"], workload, "jsonl", root / "failed-run")
+            self.assertIs(raised.exception, original)
+            retained = json.loads((root / "failed-run" / "observation.json").read_text())
+            self.assertEqual(retained["failed_stage"], "verification")
+            self.assertEqual(retained["status"], "failed")
+            self.assertIsNone(retained["accepted_rows_per_second"])
+            self.assertEqual(retained["import"]["inserted"], 3)
+            self.assertGreater(retained["process_seconds"], 0)
+            self.assertIn("sampled_process_tree_rss_bytes", retained)
+            self.assertEqual(raised.exception.benchmark_observation, retained)
 
     def test_owned_schema_cleanup_preserves_original_failure(self):
         original = RuntimeError("test primary")

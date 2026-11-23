@@ -165,7 +165,7 @@ The printed `artifacts/phase2-baseline/<invocation>/` directory contains:
 | `workloads.json` | Seed, row counts, paths, exact byte sizes and SHA-256 hashes |
 | `runs.jsonl` | Every measured result, including failures, commands, counts, full-column verification and sampled memory |
 | `summary.json` | Successful-run median/range plus passed/total counts; failed imports have no successful throughput |
-| Per-run directory | Nonsecret worker configuration, stdout JSON, correlated stage logs and rejection diagnostics |
+| Per-run directory | Nonsecret configuration, stdout JSON, correlated logs, rejection diagnostics and `observation.json`; measured evidence survives later verification/cleanup failures |
 
 The supervisor measures process launch through observed exit. Generation, schema setup/cleanup and post-run correctness queries are outside that interval. Polling at 100 ms may add up to one sample interval to observed elapsed time. Worker timers expose read, transform, SQL insert, connection, transaction begin/commit/rollback and whole-pipeline seconds. The residual process interval includes interpreter/module startup, shutdown and polling; it is not pure startup time. Stage intervals can nest, so do not add all timers together.
 

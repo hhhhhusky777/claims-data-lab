@@ -155,15 +155,23 @@ def container_memory_snapshot() -> dict:
     container = os.environ.get("BENCHMARK_CONTAINER")
     if not container:
         return {"state": "not_collected"}
-    result = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{json .}}", container], capture_output=True, text=True)
-    if result.returncode:
-        return {"state": "unavailable", "returncode": result.returncode}
-    data = json.loads(result.stdout)
-    return {"state": "snapshot", "memory_usage": data["MemUsage"], "memory_percent": data["MemPerc"]}
+    try:
+        result = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{json .}}", container], capture_output=True, text=True)
+        if result.returncode:
+            return {"state": "unavailable", "returncode": result.returncode}
+        data = json.loads(result.stdout)
+        return {"state": "snapshot", "memory_usage": data["MemUsage"], "memory_percent": data["MemPerc"]}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return {"state": "unavailable", "error_type": type(error).__name__}
 
 
 def run_benchmark_import(database_url: str, workload: dict, input_format: str, directory: Path) -> dict:
-    """Run and verify one sequential import, then clean its private schema."""
+    """Run and verify one import, retaining observations even if verification fails.
+
+    A failed verification/cleanup never turns a committed child into successful
+    benchmark evidence. Retain measured time/RSS and the failed stage, remove
+    successful throughput, then propagate the original exception to the owner.
+    """
     directory.mkdir()
     path = Path(workload[input_format]["path"])
     run_id = directory.name
@@ -171,24 +179,40 @@ def run_benchmark_import(database_url: str, workload: dict, input_format: str, d
               "rejects": str(directory / "rejects.jsonl")}
     config_path = directory / "config.json"
     config_path.write_text(json.dumps(config, indent=2))
-    before = container_memory_snapshot()
-    with private_schema(database_url) as scoped_url:
-        environment = dict(os.environ, DATABASE_URL=scoped_url, PYTHONDONTWRITEBYTECODE="1")
-        command = [sys.executable, "-m", "claims_data_lab.benchmark_worker", str(config_path)]
-        observation = observe_import(command, environment, directory)
-        result = observation.get("import", {})
-        successful = observation["returncode"] == 0 and result.get("inserted") == workload["rows"] and result.get("rejected") == 0
+    command = [sys.executable, "-m", "claims_data_lab.benchmark_worker", str(config_path)]
+    observation = {"run_id": run_id, "engine": "sequential", "format": input_format,
+                   "rows": workload["rows"], "input": workload[input_format], "command": command,
+                   "status": "failed", "accepted_rows_per_second": None}
+    stage = "schema_setup"
+    try:
+        observation["database_memory_before"] = container_memory_snapshot()
+        with private_schema(database_url) as scoped_url:
+            environment = dict(os.environ, DATABASE_URL=scoped_url, PYTHONDONTWRITEBYTECODE="1")
+            stage = "import"
+            observation.update(observe_import(command, environment, directory))
+            result = observation.get("import", {})
+            successful = observation["returncode"] == 0 and result.get("inserted") == workload["rows"] and result.get("rejected") == 0
+            if successful:
+                stage = "verification"
+                observation["verification"] = verify_workload(scoped_url, path, workload["rows"])
+                successful = observation["verification"]["valid"]
+            stage = "schema_cleanup"
+        observation["database_memory_after"] = container_memory_snapshot()
+        observation["status"] = "passed" if successful else "failed"
         if successful:
-            observation["verification"] = verify_workload(scoped_url, path, workload["rows"])
-            successful = observation["verification"]["valid"]
-        observation.update({"run_id": run_id, "engine": "sequential", "format": input_format,
-                            "rows": workload["rows"], "input": workload[input_format], "command": command,
-                            "status": "passed" if successful else "failed",
-                            "accepted_rows_per_second": result["inserted"] / observation["process_seconds"] if successful else None})
-    observation["database_memory_before"] = before
-    observation["database_memory_after"] = container_memory_snapshot()
+            observation["accepted_rows_per_second"] = result["inserted"] / observation["process_seconds"]
+    except BaseException as error:
+        observation.update({"status": "failed", "accepted_rows_per_second": None,
+                            "failed_stage": stage, "error_type": type(error).__name__})
+        error.benchmark_observation = observation
+        error.add_note(f"Benchmark run={run_id} stage={stage}; measured evidence remains in {directory}")
+        try:
+            (directory / "observation.json").write_text(json.dumps(observation, indent=2))
+        except OSError as persistence_error:
+            error.add_note(f"Observation persistence failed: {type(persistence_error).__name__}")
+        raise
+    (directory / "observation.json").write_text(json.dumps(observation, indent=2))
     return observation
-
 
 def environment_evidence(database_url: str) -> dict:
     """Collect useful configuration without recording a connection string."""
@@ -260,7 +284,17 @@ def main() -> int:
                 for workload in workloads:
                     for input_format in ("csv", "jsonl"):
                         run_id = f"sequential-{input_format}-{workload['rows']}-{repeat}"
-                        result = run_benchmark_import(database_url, workload, input_format, directory / run_id)
+                        try:
+                            result = run_benchmark_import(database_url, workload, input_format, directory / run_id)
+                        except BaseException as error:
+                            retained = getattr(error, "benchmark_observation", None)
+                            if retained is not None:
+                                try:
+                                    report.write(json.dumps(retained) + "\n")
+                                    report.flush()
+                                except OSError as report_error:
+                                    error.add_note(f"Run report persistence failed: {type(report_error).__name__}")
+                            raise
                         observations.append(result)
                         report.write(json.dumps(result) + "\n")
                         report.flush()
@@ -268,7 +302,9 @@ def main() -> int:
         (directory / "summary.json").write_text(json.dumps(summarize(observations), indent=2))
         return 0 if all(r["status"] == "passed" for r in observations) else 1
     except Exception as error:
-        print(f"Benchmark failed: error_type={type(error).__name__}; inspect artifacts; no automatic retry", file=sys.stderr)
+        retained = getattr(error, "benchmark_observation", {})
+        print(f"Benchmark failed: run={retained.get('run_id', 'setup')} stage={retained.get('failed_stage', 'setup')} "
+              f"error_type={type(error).__name__}; inspect artifacts; no automatic retry", file=sys.stderr)
         return 1
 
 
