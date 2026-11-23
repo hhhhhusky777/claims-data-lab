@@ -26,7 +26,7 @@ The learning outcome is a working parallel transformation path and an honest com
 
 In scope: deterministic synthetic files, sequential baseline, local classic PySpark transformation, one existing PostgreSQL writer, correctness comparison and repeated measurements. Out of scope: distributed database/sharding, JDBC partition writes, producer/consumer overlap ([issue #3](https://github.com/hhhhhusky777/claims-data-lab/issues/3)), COPY, cloud, streaming, Spark SQL query exercises and AI. These remain later increments.
 
-Current checks on 2026-11-24: Python 3.12.9 is installed; all 18 transformation tests pass in this worktree on it. Java is absent; no Spark runtime is installed here. Available disk was approximately 22 GiB; this observation is not a resource guarantee. Hardware discovery through sysctl was denied, so CPU/RAM capacity is not claimed. Installed playbook pin equals upstream main `d038cdb`; installer validates CURRENT. No product code or runtime-package download has started.
+Current checks on 2026-11-24: Python 3.12.9 is installed; all 18 transformation tests pass in this worktree on it. Java is absent; no Spark runtime is installed here. Available disk was approximately 22 GiB; this observation is not a resource guarantee. Initial restricted hardware discovery was denied; a read-only host check then verified 16 GiB physical RAM and 10 logical CPUs. These capacities are not exclusive allocations or proof of free memory. Installed playbook pin equals upstream main `d038cdb`; installer validates CURRENT. No product code or runtime-package download has started.
 
 ## Research, alternatives and tradeoffs
 
