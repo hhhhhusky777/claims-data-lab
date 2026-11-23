@@ -1,64 +1,168 @@
 # Claims Data Lab
 
-Claims Data Lab is a hands-on data engineering project for a fictional insurer. Finance needs a reliable daily report of net claim payouts by product and currency. A later increment will help support staff answer policy questions with citations to the applicable clause.
+A small, readable data engineering project that transforms CSV and JSON Lines files into typed PostgreSQL rows. Build correctness first, then measure performance and introduce distributed processing and AI features incrementally. All fixtures are synthetic.
 
-The first version runs locally. The project then progresses through measured performance improvements, distributed execution, and new features. All sample records are synthetic.
+## Phase 1 — Transform files into PostgreSQL
 
-## Phase 1 — Build a working daily report
+```text
+CSV / JSONL → reader → SourceRecord → conversion → ImportedPayout
+                                                      ↓
+                                                bounded batch
+                                                      ↓
+                                            PostgreSQL transaction
+```
 
-Build a Python batch command that loads the policy lookup and one payout batch at a time, validates each row, and publishes a report. Provide a read-only report endpoint. SQLite is a reasonable starting point for demonstrating repeatable imports and atomic publication.
+The input mapping is explicit Python code for one fixed table. Each successful invocation appends every accepted record. Repeated payout IDs and versions remain separate rows. The version field is ordinary payload. The policy lookup in `fixtures/policies.csv` is retained reference material outside this import.
 
-| Input | Contract |
-|---|---|
-| `fixtures/policies.csv` | One row per `policy_id`, with its `product`. The lookup is fixed for this phase. |
-| `fixtures/payouts/YYYY-MM-DD.jsonl` | One payout version per line. Fields are `payout_id`, `version`, `policy_id`, `settled_on`, `currency`, and signed integer `amount_cents`. The filename is the delivery date. `settled_on` controls the reporting date. |
+## Quick start
 
-Keep payout history keyed by `(payout_id, version)` and select the highest accepted version for each payout. A reversal has its own payout ID and a negative amount. Preserve the source inputs so batches can be replayed, and record rejected rows with a reason and their input location.
+Use Python 3.11 or newer and a local development PostgreSQL database. The examples use Docker for a disposable database, with credentials published here solely for that local demo. Run commands from the repository root.
 
-Publish `daily_claims_paid` with one row per `settled_on`, `product`, and `currency`. Each row has `transaction_count` and `net_paid_cents`. Expose the last successful batch ID or date with the report metadata. Keep currencies separate and calculate amounts in integer cents.
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 
-### Definition of Done
+docker run --name claims-data-lab-dev -d \
+  -e POSTGRES_USER=claims \
+  -e POSTGRES_PASSWORD=claims_local_demo \
+  -e POSTGRES_DB=claims \
+  -p 127.0.0.1:55432:5432 postgres:16-alpine
 
-- A clean setup can process both fixture files using the documented command and read the report through `GET /reports/claims-paid`.
-- After the first batch, November 18 Travel totals $150. The second batch corrects it to $140. Running the second batch again leaves the report unchanged.
-- The second batch has one rejected row, T6, because its policy ID is unknown. The four published rows below total $390. Reconciliation checks compare valid current payout counts and signed amounts against the report by settlement date and currency.
-- An older payout version arriving after a correction does not roll the correction back. A simulated failure before publication leaves the last successful report readable. A retry produces the expected result.
-- Contributors can run the same acceptance checks from a clean checkout. Add setup and run instructions with the first implementation.
+docker exec claims-data-lab-dev pg_isready -U claims -d claims
+```
 
-| Settlement date | Product | Currency | Transactions | Net paid in cents |
-|---|---|---|---:|---:|
-| 2026-11-18 | Home | USD | 1 | 20000 |
-| 2026-11-18 | Travel | USD | 2 | 14000 |
-| 2026-11-19 | Home | USD | 1 | 7000 |
-| 2026-11-19 | Travel | USD | 1 | -2000 |
+Wait until `pg_isready` reports that PostgreSQL is accepting connections. Docker may download the image if it is absent locally. Dependency/image downloads follow your environment's configured mirrors and download rules.
+
+```sh
+export DATABASE_URL='postgresql://claims:claims_local_demo@127.0.0.1:55432/claims'
+mkdir -p artifacts
+
+.venv/bin/python -m claims_data_lab \
+  --input fixtures/payouts/2026-11-18.jsonl \
+  --format jsonl \
+  --batch-rows 2 \
+  --rejects artifacts/rejected.jsonl
+```
+
+Expected stdout on a successful import:
+
+```json
+{"inserted": 3, "rejected": 0}
+```
+
+Inspect the actual rows:
+
+```sh
+docker exec claims-data-lab-dev psql -U claims -d claims -c \
+  'SELECT payout_id, version, policy_id, settled_on, currency, amount_cents, source_record FROM imported_payouts ORDER BY id;'
+```
+
+| payout_id | version | policy_id | settled_on | currency | amount_cents | source_record |
+| --- | ---: | --- | --- | --- | ---: | ---: |
+| T1 | 1 | P1 | 2026-11-18 | USD | 10000 | 1 |
+| T2 | 1 | P1 | 2026-11-18 | USD | 5000 | 2 |
+| T3 | 1 | P2 | 2026-11-18 | USD | 20000 | 3 |
+
+The matching CSV contains the same data. Try it with:
+
+```sh
+.venv/bin/python -m claims_data_lab \
+  --input fixtures/payouts/2026-11-18.csv \
+  --format csv \
+  --batch-rows 2 \
+  --rejects artifacts/rejected.jsonl
+```
+
+That second invocation appends three more rows, giving six rows if both examples ran against the same database. The other JSONL fixture, `2026-11-19.jsonl`, imports four rows, including policy P99 and a negative amount. It applies no policy lookup or update interpretation.
+
+## Input contract
+
+Supply one file and an explicit `csv` or `jsonl` format per invocation. CSV fields may be reordered and both formats may contain extra fields. The readers support UTF-8 with an optional BOM. A JSONL record is one object on one physical line. CSV handles quoted commas/newlines and reports logical data-record numbers after its header.
+
+| Field | Required input | Target column type |
+| --- | --- | --- |
+| payout_id | Nonempty string | TEXT |
+| version | CSV signed integer text or native JSON integer | BIGINT |
+| policy_id | Nonempty string | TEXT |
+| settled_on | Valid YYYY-MM-DD date string | DATE |
+| currency | Nonempty string | TEXT |
+| amount_cents | CSV signed integer text or native JSON integer | BIGINT |
+
+Integers must fit PostgreSQL's signed 64-bit range. JSON booleans, floats and numeric strings fail integer validation. Extra fields are ignored. A date must have the exact format and be a real calendar date.
+
+The target table is `imported_payouts`. PostgreSQL generates its `id` primary key. The pipeline adds `source_file` and `source_record` to each row. Table creation is automatic, while schema migrations remain future work.
+
+## Transactions, rejects and retries
+
+`--batch-rows` is required and positive. It limits records per insert group, with the final partial group also written. The whole file uses one database transaction, including table creation and all groups. Expected row errors go to the rejection file while accepted rows continue. Fatal read, output or database errors abort the file transaction. Previously committed imports remain intact.
+
+The rejection output is an appended JSONL diagnostic file in an existing directory. Each diagnostic contains `source_file`, `source_record` and `reason`. It may survive a database rollback and can contain entries from multiple attempts. Input and output must be distinct, including symlink/hardlink aliases. Blank or malformed JSONL and missing/invalid row values are rejected. Missing required CSV headers, malformed CSV framing, decoding and file-access errors abort processing.
+
+| CLI outcome | Exit status | Output |
+| --- | ---: | --- |
+| File committed, possibly with row rejections | 0 | JSON inserted/rejected counts on stdout |
+| Fatal import failure | 1 | Stage/type diagnostics on stderr; no success counts |
+| Invalid arguments or missing DATABASE_URL | 2 | Argument error and usage on stderr |
+
+The CLI keeps connection strings and raw exception messages out of its output. The Python API preserves original exceptions and causes. A connection failure during COMMIT may leave the outcome unknown. Inspect PostgreSQL before repeating an ambiguous import. A confirmed rollback can be retried, but repeating a successful import appends its rows again. Rejection-output counts describe the current successful invocation, not the cumulative diagnostic file.
+
+## Read the code
+
+1. `claims_data_lab/models.py` defines the records passed between stages.
+2. `claims_data_lab/readers.py` yields one located source record or rejection at a time.
+3. `claims_data_lab/transform.py` converts fields into target types.
+4. `claims_data_lab/database.py` owns schema, grouped inserts and the file transaction.
+5. `claims_data_lab/pipeline.py` connects the stages and returns committed counts.
+6. `claims_data_lab/cli.py` parses arguments and calls the pipeline. `__main__.py` provides `python -m claims_data_lab`.
+
+Memory depends on the largest input record plus the configured batch of transformed records. There is no hard byte limit, queue or parallel worker in this version.
+
+## Tests
+
+The standard-library unit tests use real temporary files. Database tests are enabled only with `TEST_DATABASE_URL` and create/drop their own private schemas. Use a disposable local database and an account allowed to create schemas.
+
+```sh
+# Unit and CLI checks run; database cases explicitly skip without TEST_DATABASE_URL.
+.venv/bin/python -m unittest discover -s tests -v
+
+# Enable actual PostgreSQL integration and subprocess CLI checks.
+TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests -v
+```
+
+Do not interpret skipped integration cases as PostgreSQL evidence. Review results and the current validation boundary in [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2).
+
+## Definition of Done
+
+- Both input formats produce the known column values and committed counts in PostgreSQL.
+- Required types, rejection locations and append-on-repeat behavior are verified.
+- Insert groups stay bounded and the last partial group is written.
+- A fatal failure after an earlier insert group rolls back the file's new rows.
+- CLI errors have truthful exit status and omit credentials.
+- Setup and inspection commands can be reproduced from a clean checkout.
+
+When finished with the disposable example database:
+
+```sh
+docker stop claims-data-lab-dev
+# Remove this demo container and its anonymous data volume when its data is no longer needed.
+docker rm -v claims-data-lab-dev
+```
 
 ## Phase 2 — Measure and improve performance
 
-Generate a larger, repeatable workload. Capture end-to-end batch time, rows processed per second, and report query latency. Use the query plan and measurements to pick one bottleneck. If rebuilding history dominates, try republishing only the affected dates. When a correction moves a payout to a different date, rebuild both the old and new dates. Record before-and-after results on the same inputs and verify identical report rows.
+Measure the working import baseline before changing it. Candidate experiments include PostgreSQL COPY, [bounded pipeline parallelism](https://github.com/hhhhhusky777/claims-data-lab/issues/3), and the same transformation in PySpark. Compare output correctness, end-to-end throughput, stage costs and memory on identical workloads. Spark can distribute transformation, while destination loading can remain a bottleneck.
 
-## Phase 3 — Scale and extend in small increments
+## Phase 3 — Extend coverage
 
-| Increment | What it should demonstrate |
-|---|---|
-| Spark and Parquet | Run the same report in PySpark. Compare ordinary and broadcast join plans, inspect shuffle metrics, and verify output parity with the local baseline. |
-| Azure operations | Run a scheduled job against ADLS and Delta tables. Verify run status, retry behavior, and published results. |
-| Change data capture | Consume database changes and resume from a checkpoint. Reconcile results after duplicates and out-of-order delivery. |
-| Policy Q&A | Compare keyword and embedding retrieval on labeled questions. Cite the applicable policy version and clause. Abstain when evidence is missing. |
-| Internal UI | Show report filters and freshness, and display policy answers with citations. |
-
-Keep ingestion, publication, and serving behind clear boundaries. Ingestion owns validation and payout versions. Reporting owns aggregation and publication. The API reads the published result. That keeps the report contract stable when the compute engine or data source changes.
-
-## First contribution
-
-Start with a test for `$150 → $140 → $140 after replay`. Implement the smallest pipeline that passes it, then add rejection, reconciliation, and the interrupted-publication test.
+Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
 
 ## Performance Goals and Evidence
 
-The repository owner approves workload boundaries and performance goals. Correctness is the first milestone. The small tracked fixtures establish expected results and provide no capacity or latency claim. No numeric performance target has been accepted yet.
+The accepted starting synthetic benchmark profile is 100,000 and 1,000,000 rows, 500-row groups, three runs per size, one importer and one isolated PostgreSQL instance. Throughput and peak memory are measured before improvement targets are set. Dataset shape and runtime-resource configuration belong to the Phase 2 design. See [the Spark experiment](https://github.com/hhhhhusky777/claims-data-lab/issues/4).
 
-Before optimization, agree on generated row counts, key distribution and skew, batch sizes, query frequency, concurrency and the available machine resources. Add a reproducible benchmark command with its seed and parameters when the runnable pipeline exists. Record end-to-end batch seconds, accepted rows per second, and report query latency in milliseconds. Capture the commit, environment, dataset parameters and repeated-run results with the comparison in the pull request. Compare unchanged workloads and verify identical reports before interpreting improvement. Document variability and unmeasured conditions.
+The repository owner approves workload boundaries and performance goals. Small fixtures establish correctness and provide no capacity or latency claim. No numeric performance target has been accepted.
 
-Revisit the contract with the owner when workload, resources, deployment or performance goals change. Missing benchmark inputs defer dependent performance choices while Phase 1 correctness work proceeds.
+Before optimization, agree on row counts, record sizes, key distribution, batch sizes, concurrency and available client/database resources. Add a repeatable benchmark command with seed and parameters. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
 
 ## Delivery playbook setup
 

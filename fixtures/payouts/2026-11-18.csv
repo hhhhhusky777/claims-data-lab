@@ -1,0 +1,4 @@
+payout_id,version,policy_id,settled_on,currency,amount_cents
+T1,1,P1,2026-11-18,USD,10000
+T2,1,P1,2026-11-18,USD,5000
+T3,1,P2,2026-11-18,USD,20000
