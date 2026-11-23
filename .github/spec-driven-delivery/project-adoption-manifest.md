@@ -51,7 +51,7 @@ The installer and runtime are machine-local and ignored through Git's local excl
 | Documentation | Check relative links and `git diff --check` for this adoption |
 | Runtime | `./install-sdd.sh --revision d038cdb6878232583085231f57dcc4b872124242 --validate` |
 | Product tests | [README tests](../../README.md#tests) documents unit and isolated PostgreSQL integration commands; review evidence remains in the PR |
-| Performance | Numeric workload and targets remain open; does not block adoption or correctness work; blocks dependent performance decisions until accepted |
+| Performance | Starting row counts, group size and repeats are accepted in README; dataset shape, runtime resources and measurement details require feature-design acceptance before dependent benchmark work; numeric improvement targets remain unset |
 | CI and environments | Local run instructions exist; automated CI and cloud deployment remain deferred |
 | Playbook deviations | None proposed |
 | Human decision | Owner accepted adoption of candidate 243c302 after both reviews; acceptance recorded in [PR #1](https://github.com/hhhhhusky777/claims-data-lab/pull/1). Protected-target merge remains separate. |
