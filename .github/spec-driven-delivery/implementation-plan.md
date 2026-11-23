@@ -7,8 +7,8 @@
 | Field | Value |
 | --- | --- |
 | State | `IN_PROGRESS` |
-| Active tasks | T3 — focused checks passed; candidate review |
-| Next ready task | None; stop after reviewed T3 |
+| Active tasks | `None` — stopped after T3 as requested |
+| Next ready task | None; final readiness awaits owner continuation |
 | Active blocker | None |
 | Implementation mode | human-review-before-merge; Autopilot off; stop after every completed task |
 | Delivery branch / target | `feature/phase1-transform` / `main` |
@@ -26,11 +26,11 @@ The owner's narrowed transformation-only scope and explicit design acceptance go
 
 All tasks use `feature/phase1-transform`, PR #2, required target `main`, under one final-PR integration model. There are no intermediate task merges. Only the final reviewed delivery may merge with separate owner authority. Assumptions consumed by each task: None.
 
-| ID | State | Depends on | Consumed design | Scaffold work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
+| ID | State | Depends on | Consumed design | Implementation work and outcome | Boundaries | Error handling / validations | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | T1 | DONE | None | D1, D3, D4, D6 | Implement models, errors, incremental CSV/JSONL readers and fixed transformation with focused unit tests | File-to-typed-record slice; database and CLI follow later | V1 row errors versus fatal framing/header errors; preserve source locations | Actual fixture records convert to expected types; rejects, extra/reordered columns, BOM, strict dates/integers and iterator behavior tested |
 | T2 | DONE | T1 | D1–D7 | Implement database schema, writer-owned transaction, batched inserts and pipeline; test actual PostgreSQL behavior | Plain append, one file transaction, bounded batches; no business merge or queue | V1/V2 as consumed, FC1 rollback and unknown commit; diagnostic output failures propagate | Real PostgreSQL inserts, final partial batch, append-on-rerun and rollback-after-earlier-group evidence |
-| T3 | IN_PROGRESS | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
+| T3 | DONE | T1, T2 | D1, D2, D7; canonical updates | Implement CLI, add corresponding CSV fixture, setup/run instructions, reconcile README/manifest and complete end-to-end tests | Environment credentials; scope remains transformation only | CLI V2, redacted stage errors, committed counts | CLI-to-PostgreSQL execution for both formats; actual rows and rejects verified; closing docs reviewed |
 
 After each task passes its focused checks and both retained reviewers approve its exact candidate, mark it DONE and stop. The owner chooses when to continue. Do not start a dependent task automatically.
 
@@ -78,7 +78,7 @@ Before final tests, complete the playbook implementation audit, retained reviews
 | --- | --- | --- |
 | File transformation | Complete typed readers and conversion with focused tests | Implemented; 18 focused tests passed; both retained reviewers approved T1 candidate 42e52d6 |
 | Transactional ingestion | PostgreSQL file transaction and bounded inserts verified | Implemented; 14 focused T2 tests passed against PostgreSQL; both reviewers approved 15bcc4a |
-| Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Implemented; 10 focused T3 tests passed; review pending |
+| Runnable learning project | CLI, fixtures and README/manifest reflect tested PostgreSQL behavior | Implemented; 10 focused T3 tests passed; both retained reviewers approved 524935a |
 | Merge candidate | Required review, exact-head validation and closing archive/reset | Pending final readiness and owner authority |
 
 ## Task T1 result
@@ -105,4 +105,6 @@ Reviewer A found that exclusive diagnostic output creation introduced an unneces
 
 Implemented cli.py and __main__.py, the equivalent CSV payout fixture, local setup/inspection/cleanup instructions and the PostgreSQL transformation contract in README. Reconciled stable manifest authority links and gaps. CLI requires explicit positive batch_rows and format; DATABASE_URL comes from the environment. It returns committed counts as JSON with exit 0, fatal pipeline failures with exit 1 and argument/environment errors with exit 2. Raw exception/connection strings are withheld from CLI output while the Python API retains the original errors.
 
-Focused command: `TEST_DATABASE_URL=<isolated-test-url> PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p test_cli.py -v`. Ten T3 tests passed on Python 3.14.5 with Psycopg 3.3.2 against a task-owned PostgreSQL 16-alpine container, including four subprocess-to-database cases. Unit cases verify parser behavior, missing credentials, committed-count output and redaction. Subprocess cases verify both actual fixture formats, rejects, fatal rollback and argument rejection before database effects. Relative links and whitespace checks passed. Final feature validation has not run; the owner’s requested task stop precedes final readiness and archive/reset.
+Focused command: `TEST_DATABASE_URL=<isolated-test-url> PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests -p test_cli.py -v`. Both retained reviewers approved exact task candidate 524935a with no findings and independently reran all ten focused tests. Task T3 is DONE; stop before final feature readiness. Ten T3 tests passed on Python 3.14.5 with Psycopg 3.3.2 against a task-owned PostgreSQL 16-alpine container, including four subprocess-to-database cases. Unit cases verify parser behavior, missing credentials, committed-count output and redaction. Subprocess cases verify both actual fixture formats, rejects, fatal rollback and argument rejection before database effects. Relative links and whitespace checks passed. Final feature validation has not run; the owner’s requested task stop precedes final readiness and archive/reset.
+
+The task-owned T3 verification container and anonymous data volume are removed after review. Dependencies remain in the existing virtual environment for reuse. No final audit, full-suite result, archive/reset or merge readiness is claimed at this task stop.
