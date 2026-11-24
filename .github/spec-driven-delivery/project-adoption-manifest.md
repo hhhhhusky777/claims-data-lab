@@ -33,7 +33,7 @@
 | Documentation and learning boundaries | [AGENTS.md](../../AGENTS.md) | English identifiers/docstrings; implementation scope follows the owner’s explicit learning request |
 | Data and concurrency | [README](../../README.md#input-contract) | Fixed types, append-only import, bounded driver insert groups and one transaction per file; optional pure local Spark conversion |
 | CI, release, operations | [README](../../README.md#quick-start) | Local PostgreSQL setup and cleanup; CI and cloud release remain future work |
-| Performance Goals and Evidence | [README](../../README.md#performance-goals-and-evidence) | Owner-defined staged approach and accepted starting synthetic workload; numeric improvement targets and detailed benchmark configuration remain for Phase 2 |
+| Performance Goals and Evidence | [README](../../README.md#performance-goals-and-evidence) | Owner-defined staged approach, accepted synthetic workload and delivered benchmark configuration/commands; numeric improvement targets remain unset |
 | Durable delivery decisions | [solution whiteboard](solution-whiteboard.md), [delivery archives](archive/), Git and pull requests | Whiteboard owns current design; an active implementation plan owns task state; closing archives preserve completed delivery sources |
 | Project Experience | [Experience](experience.md) | Verified lessons maintained by contributors, subject to current authority |
 | Reusable guidance | [Knowledge Base](knowledge-base/README.md) | Complete installer-managed tree at the pinned revision |

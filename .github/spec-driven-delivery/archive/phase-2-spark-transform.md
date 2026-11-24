@@ -183,13 +183,13 @@ This is the only active-delivery state authority. Review comments, exact run res
 | Delivery branch / target | feature/phase2-spark → main, one feature PR #5 |
 | Owner | Repository owner hhhhhusky777 |
 | Primary issue / need | [Issue #4](https://github.com/hhhhhusky777/claims-data-lab/issues/4) |
-| Concluded whiteboard | [Whiteboard](../solution-whiteboard.md), accepted design 223fbcf; metadata conclusion 144013f verified by both retained reviewers |
+| Concluded whiteboard | [Whiteboard](#solution-whiteboard--spark-transformation-experiment), accepted design 223fbcf; metadata conclusion 144013f verified by both retained reviewers |
 | Required reviewers | phase2_review_a and phase2_review_b, retained independently through merge |
 | Last verified | 2026-11-24; design accepted/frozen; Owner approved continuation after T3; combined audit approved by author and both retained reviewers at75cf6a2; owner accepted implementation and authorized final validation; PR owns final evidence; Autopilot OFF |
 
 ## Governing inputs and delivery boundaries
 
-Source hierarchy: explicit owner decisions and [AGENTS](../../../AGENTS.md); the accepted [whiteboard](../solution-whiteboard.md), [README](../../../README.md) contracts and [manifest](../project-adoption-manifest.md); implementation/test evidence at its exact candidate. Installed playbook revision d038cdb is current. All Architecture and Engineering KB topics were read before planning; apply them within these contracts.
+Source hierarchy: explicit owner decisions and [AGENTS](../../../AGENTS.md); the accepted [whiteboard](#solution-whiteboard--spark-transformation-experiment), [README](../../../README.md) contracts and [manifest](../project-adoption-manifest.md); implementation/test evidence at its exact candidate. Installed playbook revision d038cdb is current. All Architecture and Engineering KB topics were read before planning; apply them within these contracts.
 
 The outcome is an optional, correctness-preserving local Spark transformation path plus reproducible evidence against the sequential importer. Speedup is not required. Scope is D1–D6; distributed databases, parallel JDBC/Psycopg writers, COPY, pipeline overlap, cloud and AI are excluded. English readable implementation is authorized by the owner's continuing full-code learning request; stop after each reviewed task for reading and explicit continuation. Do not replace these stops with automatic task advancement.
 
