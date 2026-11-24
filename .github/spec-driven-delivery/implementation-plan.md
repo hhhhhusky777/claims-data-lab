@@ -9,9 +9,9 @@ This is the only active-delivery state authority. Review comments, exact run res
 | Field | Value |
 | --- | --- |
 | State | `IN_PROGRESS` |
-| Active tasks | None; T3 complete, reading stop |
-| Next ready task | Final implementation audit after owner continuation |
-| Active blocker | Owner-requested code-reading stop after T3 |
+| Active tasks | Combined implementation audit; T1–T3 complete |
+| Next ready task | Final validation after audit approvals and explicit owner implementation acceptance |
+| Active blocker | Owner implementation acceptance required before final-test work, after retained audit approvals |
 | Implementation mode | Human-controlled, human-review-before-merge; Autopilot OFF |
 | Authorized scope / feature branch / protected target | Accepted design D1–D6; feature/phase2-spark; main. Design acceptance is not plan acceptance or merge authority |
 | Delivery branch / target | feature/phase2-spark → main, one feature PR #5 |
@@ -19,7 +19,7 @@ This is the only active-delivery state authority. Review comments, exact run res
 | Primary issue / need | [Issue #4](https://github.com/hhhhhusky777/claims-data-lab/issues/4) |
 | Concluded whiteboard | [Whiteboard](solution-whiteboard.md), accepted design 223fbcf; metadata conclusion 144013f verified by both retained reviewers |
 | Required reviewers | phase2_review_a and phase2_review_b, retained independently through merge |
-| Last verified | 2026-11-24; design accepted/frozen; T3 code/evidence reviewed atfa02dba; paired benchmark and focused checks passed; PR owns live task-stop approval; Autopilot OFF |
+| Last verified | 2026-11-24; design accepted/frozen; Owner approved continuation after T3; combined implementation self-audit prepared against6273343; PR owns audit dispositions; no final tests run; Autopilot OFF |
 
 ## Governing inputs and delivery boundaries
 
@@ -102,7 +102,105 @@ Commands will be documented in README as runnable entry points when each task im
 
 ### Implementation review
 
-Final implementation audit not started. T1–T3 task outcomes, task-focused checks and accepted benchmark evidence are complete. After owner continuation, prepare actual combined business/data/error flow diagrams and the implementation review table against the complete code. Author and both retained reviewers must approve the exact combined implementation, then obtain explicit owner acceptance before final-test work. No final-feature suite or merge readiness is claimed.
+The owner approved continuation after T3 on 2026-11-24. Author self-review approves the complete implementation carried by6273343: it follows accepted D1–D6, consumes existing parsing/conversion/transaction contracts and reuses standard libraries plus Psycopg, PySpark and psutil. This audit preparation changes documentation only. No product/test edits, missing-test additions or final-suite execution occur at this gate. Exact retained-review dispositions belong in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5).
+
+| Information | Implementation summary / evidence |
+| --- | --- |
+| Implementation / design | D1–D4: optional Spark engine with sequential default, located staging, pure partition conversion and one shared driver-owned PostgreSQL file transaction. D5–D6: deterministic real workloads, fresh-process paired measurements, complete multiset verification and preserved task reading stops. README/manifest carry the implemented contracts; overlap remains issue#6 |
+| Code-level flows | Business sequence, data flow and error activity below match current pipeline.py, spark_transform.py, benchmark_worker.py, benchmark.py and comparison.py; source links follow the views |
+| Review findings | Historical reporting loss fixed in52dda28 and completed for final observation writes infa02dba. Extra API rejection removed in2dfb43d, preserving CLI V1/FC1. No outstanding author finding; both retained audit dispositions are owned by PR #5 |
+| Risks / limits / unknowns | Local[2] only; serial parsing/staging and full materialization before loading. Largest record/partition and JVM/Python overhead have no hard total-memory bound. File transactions can be large; imports append on repeat. SDK socket warnings persist; sustained stability, cold-cache behavior and production/multi-node capacity are unproven. Unknown-COMMIT coverage is driver simulation, not a real network-fault test |
+| Validation | Reviewed task-specific checks remain tied to their recorded candidates, including T2's75focused passes at2dfb43d and T3's42focused passes atfa02dba (overlapping suites). Full24-import comparison passed complete checks for13.2Mrows atcleanfa02dba. Audit introduces no test run. Final combined suite remains unrun; required coverage inventory is retained above |
+| Recommendation / decision | Author recommends accepting the combined implementation and running final validation after both retained audit approvals. Owner implementation acceptance is required before final-test work; protected-target merge remains a separate decision |
+
+#### Business sequence
+
+This view follows one import, called directly or from a fresh benchmark worker. A benchmark checks both committed private tables after the pair completes, outside importer timing.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant B as Benchmark supervisor (optional)
+    participant P as Driver pipeline
+    participant S as Spark workers (optional)
+    participant PG as PostgreSQL
+    alt Direct import
+        User->>P: CLI input, format, batch size and engine
+    else Paired benchmark
+        User->>B: Run accepted comparison profile
+        B->>P: Fresh worker with engine config and private-schema URL
+    end
+    P->>PG: Begin file transaction and ensure table
+    alt Sequential
+        P->>P: Incrementally read and convert records
+    else Spark
+        P->>P: Stage located reader outcomes
+        P->>S: Pure partition conversion and DISK_ONLY materialization
+        S-->>P: Cached converted outcomes and native task evidence
+    end
+    loop Consume outcomes
+        P->>PG: Insert bounded full/final groups
+        P->>P: Append row rejection diagnostics
+    end
+    P->>P: Clean source resources and close diagnostic output
+    P->>PG: Commit file transaction
+    P-->>User: Committed counts (direct CLI)
+    opt Paired benchmark
+        P-->>B: Counts, stages and process evidence
+        B->>PG: Formula checks and bidirectional EXCEPT ALL
+        B->>PG: Drop owned schemas after pair comparison
+        B-->>User: Retained observations and valid-pair summaries
+    end
+```
+
+#### Data flow
+
+D1–D5 keep one owner for parsing, conversion and writes. Workers receive located synthetic records/code, not database URLs or write handles. SQL insert time nests inside driver consumption; benchmark verification is outside importer timing.
+
+```mermaid
+flowchart LR
+    F[CSV or JSONL file] --> R[Existing reader]
+    R --> Q[Located SourceRecord or RejectedRecord]
+    Q --> C[Sequential convert_record]
+    Q --> E[Temporary located envelopes]
+    E --> S[Pure Spark partition convert_record]
+    S --> K[DISK_ONLY outcomes]
+    K --> I[Driver iterator without prefetch]
+    C --> W[Shared driver writer]
+    I --> W
+    W --> DB[(PostgreSQL rows)]
+    W --> J[Appended rejection JSONL]
+    S --> N[Native event logs]
+    W --> M[Shared stage and run context]
+    N --> O[Benchmark observations]
+    M --> O
+    DB --> V[Formula and complete multiset checks]
+    V --> O
+    O --> U[Valid-pair summaries with all runs retained]
+```
+
+#### Error activity
+
+Expected row errors continue. Fatal import failures roll back the file; diagnostic artifacts may remain. A benchmark failure after a successful child commit is a failed observation/pair, not a retroactive import rollback. Unknown COMMIT requires inspection rather than automatic retry.
+
+```mermaid
+flowchart TD
+    A[Import outcome] --> K{Outcome category}
+    K -->|Expected row error| R[Append located rejection and continue]
+    K -->|Fatal read / Spark / transfer / output / DB error| X[Abort file transaction and roll back]
+    X --> C[Preserve primary cause and stage; attempt owned cleanup]
+    C --> F[Nonzero failure; no committed success counts]
+    K -->|All outcomes consumed| E[Clean source and close output]
+    E --> M[Attempt commit]
+    M -->|Confirmed success| S[Return committed counts]
+    M -->|Connection lost during commit| U[Effects may be unknown]
+    U --> H[Operator inspects PostgreSQL before retry]
+    S --> B{Optional benchmark verification / cleanup / report}
+    B -->|Failure| P[Retain obtained measurements and original error; mark failed pair]
+    B -->|Success| V[Include complete valid pair in summaries]
+```
+
+Source reading anchors: [driver/writer](../../claims_data_lab/pipeline.py), [pure conversion](../../claims_data_lab/transform.py), [Spark adapter](../../claims_data_lab/spark_transform.py), [transaction](../../claims_data_lab/database.py), [measurements](../../claims_data_lab/measurements.py), [worker](../../claims_data_lab/benchmark_worker.py), [per-run benchmark](../../claims_data_lab/benchmark.py), [paired comparison](../../claims_data_lab/comparison.py).
 
 ### Delivery Definition of Done
 
@@ -129,7 +227,7 @@ Final implementation audit not started. T1–T3 task outcomes, task-focused chec
 
 ## Human review brief
 
-DISCLOSE: T1–T3 are complete with task-focused checks and actual comparison evidence; current local Spark is slower and uses more sampled RSS under the accepted profile. HUMAN_DECISION: explicit continuation after T3 code/results reading before the combined implementation audit; final human implementation acceptance and merge remain separate. Autopilot stays OFF. NONE: new design decisions, rejection rules or unresolved findings. Detailed reviews and all run results belong in PR #5.
+DISCLOSE: T1–T3 are complete with task-focused checks and actual comparison evidence; current local Spark is slower and uses more sampled RSS under the accepted profile. HUMAN_DECISION: explicit implementation acceptance after the combined audit before final tests; protected-target merge remains separate. Autopilot stays OFF. NONE: new design decisions, rejection rules or unresolved findings. Detailed reviews and all run results belong in PR #5.
 
 
 ## T1 actual result and reading stop
