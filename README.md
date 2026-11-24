@@ -273,7 +273,7 @@ Both private tables remain until a bidirectional PostgreSQL `EXCEPT ALL` compari
 
 Process elapsed time includes Python/JVM startup, staging, conversion/materialization, partition-statistics collection, transfer, insert groups, application cleanup and commit. Sampled importer/descendant RSS includes JVM/Python workers and may count shared pages twice or miss short peaks. SDK process teardown after the observed importer exit is not separately timed. SQL time nests inside consumption, so these intervals must not be summed. Spark materialization includes staged input, Python conversion, scheduling/serialization and cache writes; it is not isolated converter CPU time. OS/DB cache warmth and unrelated host activity remain uncontrolled and disclosed.
 
-The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. Results in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5) are local experiment evidence, with no speed target or production/cluster capacity claim.
+The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. All observations, medians/ranges and the reviewed interpretation are retained in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). They are local experiment evidence, with no speed target or production/cluster capacity claim. The comparison retains sequential as the default; future performance changes need their own evidence.
 
 ## Phase 3 — Extend coverage
 
