@@ -386,7 +386,7 @@ The standard `python -m claims_data_lab.benchmark` entry still runs sequential-o
 
 ## Phase 3 — Delivery roadmap
 
-See the [planned AI solution](#phase-3-solution--grounded-ai-planned) above and [design PR #9](https://github.com/hhhhhusky777/claims-data-lab/pull/9). Concrete task contracts follow the reviewed design. The existing importers remain unchanged; AI key configuration, live model calls and generated-answer quality are not delivered yet.
+See the [planned AI solution](#phase-3-solution--grounded-ai-planned) above and [design PR #9](https://github.com/hhhhhusky777/claims-data-lab/pull/9). The owner selected OpenAI but the API key is not ready. Key-independent document preparation, PostgreSQL/pgvector storage and retrieval plumbing come first; genuine embeddings and generated answers remain deferred. Concrete task contracts follow the reviewed design in [the whiteboard](.github/spec-driven-delivery/solution-whiteboard.md). No paid model calls or AI dependency installation has occurred. The existing importers remain unchanged; Spark optimization remains issue #6.
 
 ## Performance Goals and Evidence
 
