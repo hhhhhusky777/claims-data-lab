@@ -144,8 +144,9 @@ sequenceDiagram
     end
     P->>P: Clean source resources and close diagnostic output
     P->>PG: Commit file transaction
-    P-->>User: Committed counts (direct CLI)
-    opt Paired benchmark
+    alt Direct import
+        P-->>User: Committed counts
+    else Paired benchmark
         P-->>B: Counts, stages and process evidence
         B->>PG: Formula checks and bidirectional EXCEPT ALL
         B->>PG: Drop owned schemas after pair comparison
@@ -155,7 +156,7 @@ sequenceDiagram
 
 #### Data flow
 
-D1–D5 keep one owner for parsing, conversion and writes. Workers receive located synthetic records/code, not database URLs or write handles. SQL insert time nests inside driver consumption; benchmark verification is outside importer timing.
+D1–D5 keep one owner for parsing, conversion and writes. Workers receive located input records and conversion code, not database URLs or write handles. SQL insert time nests inside driver consumption; benchmark verification is outside importer timing.
 
 ```mermaid
 flowchart LR
