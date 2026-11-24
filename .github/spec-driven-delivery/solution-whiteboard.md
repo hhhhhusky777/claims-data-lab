@@ -15,10 +15,12 @@
 | ID | Direction / fact | State |
 | --- | --- | --- |
 | DR1 | Owner authorized Phase 2 merge and moving to Phase 3 AI engineering | Main31d390f contains exactly the validated049b796 source tree |
-| DR2 | Owner has OpenAI API quota | Provider selected; no key inspected, account access verified or paid call made |
+| DR2 | Owner has OpenAI API quota but the API key is not ready | Provider selected; leave key empty; no live embedding/generation calls until configured |
 | DR3 | Build correctness first, measure/improve later, stop after reviewed tasks for code reading | Existing project learning boundary retained |
 | DR4 | Keep sequential and Spark importers; sequential remains default | Merged contract; Spark overhead issue#6 stays independent |
 | DR5 | Propose an evidence-grounded Claims Operations Assistant | Proposed scope below, not yet accepted/frozen |
+| DR6 | Owner requests implementing key-independent components first and leaving token blank | Prepare ingestion/chunking/storage/retrieval plumbing and offline tests; defer live embedding and generation |
+| DR7 | Author recommends PostgreSQL with pgvector for document retrieval | Reuse PostgreSQL/Psycopg; separate document tables from imported payouts; exact setup/pins still require preflight |
 
 ## Current understanding and authority
 
@@ -51,7 +53,7 @@ flowchart LR
     T --> G
 ```
 
-This is a proposal, not a selected implementation architecture. Retrieval storage and first-increment boundaries must be concluded before dependent code.
+The recommended retrieval store is PostgreSQL with the pgvector extension, in separate document/chunk tables alongside the existing payout table. RAG is the application workflow, not the database. The complete first-increment contracts still need conclusion before dependent code.
 
 ## Research and options
 
@@ -62,11 +64,19 @@ Microsoft's [RAG explanation](https://learn.microsoft.com/en-us/azure/foundry/co
 | Option | Fit / trade-off | Proposed disposition |
 | --- | --- | --- |
 | Official OpenAI SDK, explicit Python orchestration | Makes embedding/retrieval/tool/output steps visible for learning; account quota is available per owner | Prefer; no additional orchestration framework initially |
-| PostgreSQL + pgvector | Reuses database operation skills; [pgvector-python](https://github.com/pgvector/pgvector-python) supports Psycopg3; needs server extension and deployment/version preflight | Candidate, not installed or accepted yet |
+| PostgreSQL + pgvector | Reuses database operation skills; [pgvector-python](https://github.com/pgvector/pgvector-python) supports Psycopg3; needs server extension and deployment/version preflight | Recommended store; exact pins/setup and complete design acceptance pending |
 | Small local exact-vector store | Fewer services, useful small-corpus baseline; separate persistence and vector math | Compare with pgvector before concluding; no custom ANN engine |
 | Hosted file search | Less indexing code; hides some chunking/storage work and adds hosted-resource lifecycle/cost | Alternative if learning priority changes |
 | Azure AI Search / Azure model service | Closer to JD platform, adds account/deployment prerequisites | Later adapter; owner currently selected OpenAI |
 | LangChain / larger agent framework | Additional abstractions before a demonstrated need | Defer initially |
+
+## API-key-independent implementation order
+
+Owner requested building other components while the API key is unavailable. Keep OPENAI_API_KEY empty in example/local configuration; never commit a real credential. Parsing, chunking, schema/storage, provenance, query plumbing, prompt assembly and output/citation validation do not need a live model call. Existing importer operations must not require the key.
+
+Both OpenAI embeddings and OpenAI answer generation require an API key. Until it is available, documents may be persisted as prepared chunks with embeddings absent; they must not be presented as semantically indexed. Keep readiness explicit rather than writing zero/fabricated vectors into the live semantic index. Retrieval SQL can be integration-tested with clearly labeled fixed vectors, and provider contracts can be tested with controlled clients; neither proves real semantic relevance or generated-answer quality. Do not silently substitute keyword search, a local embedding model or fake prose for the missing provider.
+
+Once a key is configured and live execution budget is agreed, generate genuine embeddings, make the index ready, and run real retrieval/answer evaluation. Offline component completion and live end-to-end AI completion remain distinct results.
 
 ## Proposed first-increment Definition of Done
 
