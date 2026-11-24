@@ -2,6 +2,115 @@
 
 A small, readable data engineering project that transforms CSV and JSON Lines files into typed PostgreSQL rows. Build correctness first, then measure performance and introduce distributed processing and AI features incrementally. All fixtures are synthetic.
 
+## Project overview
+
+Claims Data Lab is a hands-on data and AI engineering learning system. It starts with reliable file-to-database ingestion, adds measured parallel transformation, and then extends toward evidence-grounded AI. It uses synthetic insurance-style payout data; it is not a production claims platform or a representation of any company's internal architecture.
+
+| Phase | Business / engineering problem | Solution | Current status |
+| --- | --- | --- | --- |
+| **1. Reliable ingestion** | Convert different source formats into consistent, queryable records without loading an entire file into memory | Streaming CSV/JSONL readers, explicit typed conversion, located rejections, Psycopg batch inserts and one PostgreSQL transaction per file | **Implemented and merged** — [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2) |
+| **2. Parallel transformation and measurement** | Learn where distributed processing helps, while preserving Phase 1 correctness | Optional local PySpark partition conversion, one shared driver-side writer, deterministic workloads and paired end-to-end benchmarks | **Implemented and merged** — [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5); sequential remains default |
+| **3. AI engineering** | Turn documents and structured data into evidence that an assistant can retrieve and explain | Proposed document RAG with PostgreSQL + pgvector and OpenAI, followed by narrow read-only payout tools | **Design in progress** — [PR #9](https://github.com/hhhhhusky777/claims-data-lab/pull/9); no live embeddings or generated answers yet |
+
+```mermaid
+flowchart LR
+    F["CSV / JSONL sources"] --> P1["Phase 1: parse and transform"]
+    P1 --> DB[("PostgreSQL payout records")]
+    F --> P2["Phase 2: optional Spark conversion"]
+    P2 --> W["Shared driver-side batch writer"]
+    W --> DB
+    D["Synthetic policy documents"] -. "Phase 3 planned" .-> V["Chunking, embeddings and retrieval"]
+    V -.-> AI["Grounded assistant with citations"]
+    DB -. "Planned read-only tools" .-> AI
+```
+
+### Phase 1 solution — correctness first
+
+Both file formats feed the same typed conversion and database writer. Readers yield records incrementally, so the application buffers a configurable number of accepted rows rather than the whole input. The mapping is explicit Python for a fixed schema, keeping the learning path easy to inspect.
+
+```mermaid
+flowchart TD
+    CSV["CSV: logical records, including quoted newlines"] --> R["Located SourceRecord"]
+    JSON["JSONL: physical line numbers and native JSON types"] --> R
+    R --> T["Validate and convert fields"]
+    T -->|"Valid"| B["ImportedPayout batches"]
+    T -->|"Expected row error"| J["Located JSONL rejection diagnostics"]
+    B --> PG[("PostgreSQL: parameterized inserts")]
+    PG --> C["Commit once after complete successful import"]
+    X["Fatal read / output / database error"] --> RB["Roll back all database changes for this file"]
+```
+
+- **Data contract:** every accepted row is appended. Repeated payout IDs, versions and reimports remain separate observations; there is no implicit deduplication or latest-version merge.
+- **Reliability:** expected malformed rows are diagnosed; fatal failures roll back the file transaction. Rejection files are diagnostic and may survive rollback. An interrupted COMMIT requires inspection before retry.
+- **Resource boundary:** memory depends on the largest record plus the configured batch; this is not a hard byte limit.
+- **Code:** [readers](claims_data_lab/readers.py), [conversion](claims_data_lab/transform.py), [writer/transaction](claims_data_lab/database.py), [pipeline](claims_data_lab/pipeline.py).
+
+### Phase 2 solution — parallel conversion with evidence
+
+Spark is an optional transformation engine. The original sequential engine remains available and is selected by default. Both engines reuse the same conversion rules and driver-owned PostgreSQL writer; Spark workers perform no database writes.
+
+```mermaid
+flowchart TD
+    F["Original CSV / JSONL"] --> R["Existing incremental reader"]
+    R --> E{"Selected engine"}
+    E -->|"sequential — default"| S["Convert records incrementally"]
+    E -->|"spark — explicit"| D["Stage located envelopes on disk"]
+    D --> P["Pure mapPartitions conversion: local two task slots"]
+    P --> K["Materialize outcomes in DISK_ONLY cache"]
+    K --> I["Driver iterates cached partitions without prefetch"]
+    S --> W["Shared bounded Psycopg batch writer"]
+    I --> W
+    W --> PG[("One PostgreSQL transaction per input file")]
+```
+
+The serial reader/staging and full-materialization barrier deliberately preserve the original parser/conversion contract and provide observable parallel task execution. This is **parallel conversion on one machine**, not a distributed database or a proven multi-node deployment. Transformation and database loading do not overlap in the current Spark path.
+
+**What we measured:** 100,000 and 1,000,000 rows, CSV and JSONL, 500-row batches, three observations per engine/format/size. Fresh importer processes and private schemas preserve isolation. Independent expected-value checks and bidirectional SQL `EXCEPT ALL` verify complete rows and duplicate multiplicity before each pair is accepted.
+
+| 1,000,000-row input | Sequential median | Spark median |
+| --- | ---: | ---: |
+| CSV | 16.01 s | 29.53 s |
+| JSONL | 16.31 s | 30.20 s |
+
+All **24 measured imports / 12 pairs**, representing **13.2 million imported rows**, passed complete correctness checks. Spark tasks genuinely overlapped, but the current Spark path was slower end to end on this lightweight local workload. Serial staging, startup, materialization, statistics and transfer add costs; database loading remains shared and sequential. These measurements do not isolate a hardware bottleneck or prove Spark is generally slower.
+
+**Engineering decision:** keep sequential as default; investigate removal of avoidable barriers and conversion/loading overlap in [issue #6](https://github.com/hhhhhusky777/claims-data-lab/issues/6). Report the complete result rather than assuming parallelism guarantees a speedup.
+
+**Validation evidence:** the Phase 2 final candidate passed **84 tests with zero skips**, including real PostgreSQL and Spark integration; the merged source tree matched that validated candidate. Native Spark events proved overlapping conversion tasks. Known SDK socket warnings remain disclosed; sustained stability, production capacity and cluster scaling have not been established. Exact commits, commands and limitations are in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5).
+
+**Code:** [Spark adapter](claims_data_lab/spark_transform.py), [workloads](claims_data_lab/workloads.py), [measurement supervisor](claims_data_lab/benchmark.py), [paired comparison](claims_data_lab/comparison.py).
+
+### Phase 3 solution — grounded AI (planned)
+
+The next increment extends the pipeline toward a Claims Operations Assistant. RAG is the retrieval-and-generation workflow; PostgreSQL with the pgvector extension is the proposed document/vector store. The OpenAI API supplies embeddings and language generation. The API key is not ready, so preparation that does not require live calls comes first.
+
+```mermaid
+flowchart TD
+    DOC["Synthetic Markdown / text policy documents"] --> PARSE["Parse, chunk and preserve source spans"]
+    PARSE --> PREP[("PostgreSQL: prepared documents and chunks")]
+    PREP -. "When API key is available" .-> EMB["OpenAI embeddings"]
+    EMB -.-> V[("pgvector: chunk vectors and provenance")]
+    Q["User question"] -.-> QE["Embed question"]
+    QE -.-> SEARCH["Retrieve relevant chunks"]
+    V -.-> SEARCH
+    SEARCH -.-> PROMPT["Question plus source evidence"]
+    PROMPT -.-> LLM["OpenAI: structured answer with citations"]
+    PAY[("Existing payout records")] -. "Later fixed read-only SQL tools" .-> LLM
+```
+
+All Phase 3 components in this diagram are **planned**, not implemented. The current policy reference contains product labels only, so new explicitly synthetic policy documents are required; the system cannot infer insurance terms from those labels.
+
+1. **First:** document parsing, chunking, provenance, PostgreSQL storage, retrieval plumbing and offline tests. Store absent embeddings as absent; fixed test vectors must not be presented as working semantic retrieval.
+2. **When configured:** generate genuine embeddings, retrieve evidence, and produce cited answers or an explicit insufficient-evidence result. Citations must be checked; schema-valid output alone does not establish truth.
+3. **Then:** narrow typed read-only tools retrieve payout records and compute exact explicitly scoped figures in SQL. The model explains supplied evidence; it does not execute arbitrary SQL or make payment decisions.
+4. **Evaluate:** retrieval relevance separately from answer support, citation accuracy and abstention; record model/prompt/index versions, latency and token usage. Live quality remains untested until real model calls are performed.
+
+**Learning coverage:** data preparation and lineage, vector retrieval, embeddings, prompt construction, structured output, tool calling, evaluation, observability and resource/cost awareness. Azure adapters, UI, CDC/streaming and cloud deployment remain later independent increments.
+
+### Interview walkthrough
+
+> I built this incrementally: first a reliable streaming CSV/JSONL-to-PostgreSQL importer, then an optional Spark transformation path with the same correctness and transaction contracts. I benchmarked both implementations rather than assuming parallel execution would be faster. The current local Spark version is slower for this lightweight workload, so I retained the sequential default and recorded an optimization follow-up. The next phase is a document-grounded assistant: prepare and retrieve policy evidence, add read-only tools for exact database facts, and evaluate the answers. That AI phase is currently in design, with live API integration still pending.
+
 ## Phase 1 — Transform files into PostgreSQL
 
 ```text
@@ -115,7 +224,7 @@ The CLI keeps connection strings and raw exception messages out of its output. T
 5. `claims_data_lab/pipeline.py` connects the stages and returns committed counts.
 6. `claims_data_lab/cli.py` parses arguments and calls the pipeline. `__main__.py` provides `python -m claims_data_lab`.
 
-Memory depends on the largest input record plus the configured batch of transformed records. There is no hard byte limit, queue or parallel worker in this version.
+For the default sequential engine, memory depends on the largest input record plus the configured batch of transformed records. There is no hard byte limit or producer queue. The optional Spark engine has additional partition/JVM/worker memory, described below.
 
 ## Tests
 
@@ -275,9 +384,9 @@ Process elapsed time includes Python/JVM startup, staging, conversion/materializ
 
 The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. All observations, medians/ranges and the reviewed interpretation are retained in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). They are local experiment evidence, with no speed target or production/cluster capacity claim. The comparison retains sequential as the default; future performance changes need their own evidence.
 
-## Phase 3 — Extend coverage
+## Phase 3 — Delivery roadmap
 
-Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
+See the [planned AI solution](#phase-3-solution--grounded-ai-planned) above and [design PR #9](https://github.com/hhhhhusky777/claims-data-lab/pull/9). Concrete task contracts follow the reviewed design. The existing importers remain unchanged; AI key configuration, live model calls and generated-answer quality are not delivered yet.
 
 ## Performance Goals and Evidence
 
