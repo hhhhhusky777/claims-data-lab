@@ -26,7 +26,7 @@
 
 The owner selected PostgreSQL+pgvector and OpenAI, then directed key-independent work first because the API key is unavailable. README/AGENTS retain Python, synthetic data, readable full implementation and task reading stops. Existing CSV/JSONL import, append-only payout semantics, shared writer and sequential default remain unchanged. Main is da3ea9c; the merged interview README is preserved. [PR #9](https://github.com/hhhhhusky777/claims-data-lab/pull/9) owns this delivery evidence.
 
-This conclusion candidate delivers **Phase 3A: offline document and vector-store foundations**. It is not end-to-end RAG. Natural-language question embeddings, generated answers, prompt assembly/output evaluation, payout tools, model/SDK selection, paid calls, API/UI, Azure, Spark optimization and PDF/Word extraction remain later increments. No key or paid service is required by this delivery; OPENAI_API_KEY stays blank in examples and is not read by these commands.
+This conclusion candidate delivers **Phase 3 — AI Engineering: offline document and vector-store foundations**. It is not end-to-end RAG. Natural-language question embeddings, generated answers, prompt assembly/output evaluation, payout tools, model/SDK selection, paid calls, API/UI, Azure, Spark optimization and PDF/Word extraction remain later increments. No key or paid service is required by this delivery; OPENAI_API_KEY stays blank in examples and is not read by these commands.
 
 The current policies.csv only maps P1/P2 to product names and supplies no policy terms. Add three clearly synthetic Markdown/text policy/operations fixtures for preparation examples. These do not represent Manulife rules or support eligibility/payment decisions.
 
@@ -185,7 +185,7 @@ sequenceDiagram
 
 | Draft item | Design | Disposition / rationale |
 | --- | --- | --- |
-| DR1 | D1–D7 | Preserve merged Phase2; new Phase3A delivery on PR9 |
+| DR1 | D1–D7 | Preserve merged Phase2; new Phase3 delivery on PR9 |
 | DR2 | D5–D7 | OpenAI selected for later; no key dependency now |
 | DR3 | D5/D6 | Readable implementation and stop after each task retained |
 | DR4 | D5 | Importers/default preserved; issue6 independent |
