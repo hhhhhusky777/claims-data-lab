@@ -275,9 +275,13 @@ Process elapsed time includes Python/JVM startup, staging, conversion/materializ
 
 The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. All observations, medians/ranges and the reviewed interpretation are retained in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). They are local experiment evidence, with no speed target or production/cluster capacity claim. The comparison retains sequential as the default; future performance changes need their own evidence.
 
-## Phase 3 — Extend coverage
+## Phase 3 — AI engineering (design in progress)
 
-Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
+The next proposed learning system is a Claims Operations Assistant using the official OpenAI Python SDK; the owner has OpenAI API quota. Start with synthetic policy-document ingestion, chunking, embeddings, retrieval and cited answers. Add narrow read-only PostgreSQL tools for exact payout records/summaries in a later reviewed slice, followed by evaluation and an optional local API.
+
+This is a roadmap, not implemented behavior. Concrete scope, model IDs, index storage, workload and live-call budget are still being designed in [the whiteboard](.github/spec-driven-delivery/solution-whiteboard.md) and [issue #8](https://github.com/hhhhhusky777/claims-data-lab/issues/8). Existing policies.csv contains product labels only, so synthetic policy text must be supplied before grounded policy answers are possible. No paid model calls or AI dependency installation has occurred.
+
+The existing importers remain available with sequential as default; Spark overhead is tracked separately in [issue #6](https://github.com/hhhhhusky777/claims-data-lab/issues/6). Azure adapters, CDC/streaming, UI and cloud deployment remain independently designed future increments.
 
 ## Performance Goals and Evidence
 
