@@ -254,6 +254,27 @@ Start reading `pipeline.py` for the shared writer, `spark_transform.py` for stag
 
 The pinned SDK can emit socket ResourceWarnings during collection/iteration. Its source relies on garbage collection for those sockets; see the related [Apache issue](https://issues.apache.org/jira/browse/SPARK-54247). Tests retain these warnings. Application-owned iterator/cache/context/temp cleanup is verified, while sustained resource stability is unmeasured.
 
+## Performance comparison (T3)
+
+After installing `requirements-spark.txt` and setting `JAVA_HOME`, use the same owned PostgreSQL profile as T1 (one CPU/1 GiB, cached image, loopback connection). Run:
+
+```sh
+export BENCHMARK_CONTAINER=claims-data-lab-benchmark
+.venv/bin/python -m claims_data_lab.comparison
+```
+
+This generates identical CSV/JSONL inputs once, performs four small unmeasured warm-ups (each engine/format), then runs 24 measured imports: two sizes × two formats × two engines × three repeats. Each size/format pair alternates engine order AB/BA/AB. Every importer starts a fresh Python process; Spark includes a fresh JVM launch. Input hashes, PostgreSQL limits/settings and host/runtime details are retained. The earlier T1 results are historical context; this command reruns sequential and Spark at the same current code revision.
+
+The current Spark engine fully materializes outcomes before loading. [Issue #6](https://github.com/hhhhhusky777/claims-data-lab/issues/6) records a future overlap experiment; it is not part of this comparison.
+
+Under ignored `artifacts/phase2-comparison/<invocation>/`, `runs.jsonl` preserves every measured import, `pairs.jsonl` preserves each pair's comparison/validity and `summary.json` reports per-engine median/range for complete valid pairs, along with scheduled/valid pair counts. Partial observations and original errors survive verification/cleanup failures. Reports do not silently retry or label failed pairs as successful comparison evidence.
+
+Both private tables remain until a bidirectional PostgreSQL `EXCEPT ALL` comparison checks all source/payload columns and duplicate multiplicity, excluding generated identity IDs. Per-run independent formula checks still run. Schema setup, complete-row verification, pair comparison and schema cleanup are outside importer timing; schemas are removed after comparison. Separate database memory snapshots describe conditions before/after each import, not peak memory.
+
+Process elapsed time includes Python/JVM startup, staging, conversion/materialization, partition-statistics collection, transfer, insert groups, application cleanup and commit. Sampled importer/descendant RSS includes JVM/Python workers and may count shared pages twice or miss short peaks. SDK process teardown after the observed importer exit is not separately timed. SQL time nests inside consumption, so these intervals must not be summed. Spark materialization includes staged input, Python conversion, scheduling/serialization and cache writes; it is not isolated converter CPU time. OS/DB cache warmth and unrelated host activity remain uncontrolled and disclosed.
+
+The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. Results in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5) are local experiment evidence, with no speed target or production/cluster capacity claim.
+
 ## Phase 3 — Extend coverage
 
 Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.

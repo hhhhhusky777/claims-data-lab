@@ -17,6 +17,7 @@ import zipfile
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from pathlib import Path
+from time import perf_counter
 
 from .models import RejectedRecord, SourceRecord
 from .transform import convert_record
@@ -166,6 +167,7 @@ def spark_outcomes(reader, progress, measurements=None):
         failure = error
         raise
     finally:
+        cleanup_started = perf_counter()
         cleanup_failure = None
         actions = []
         if local_iterator is not None and hasattr(local_iterator, "close"):
@@ -190,6 +192,7 @@ def spark_outcomes(reader, progress, measurements=None):
         except (OSError, ValueError, KeyError) as error:
             details["event_summary_unavailable"] = type(error).__name__
         if measurements is not None:
+            measurements.record("spark_cleanup", perf_counter() - cleanup_started)
             measurements.details["spark"] = details
         logger.info("Spark evidence: %s", details)
         if failure is None and cleanup_failure is not None:

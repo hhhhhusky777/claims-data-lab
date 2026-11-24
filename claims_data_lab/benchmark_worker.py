@@ -23,7 +23,7 @@ def main() -> int:
         with measurements.measure("pipeline"):
             result = run_pipeline(
                 Path(config["input"]), config["format"], os.environ["DATABASE_URL"],
-                Path(config["rejects"]), 500, measurements=measurements,
+                Path(config["rejects"]), 500, measurements=measurements, engine=config.get("engine", "sequential"),
             )
     except Exception as error:
         measurements.log_summary()

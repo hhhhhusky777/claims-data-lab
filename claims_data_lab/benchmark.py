@@ -12,7 +12,7 @@ import statistics
 import subprocess
 import sys
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter, sleep
@@ -165,8 +165,12 @@ def container_memory_snapshot() -> dict:
         return {"state": "unavailable", "error_type": type(error).__name__}
 
 
-def run_benchmark_import(database_url: str, workload: dict, input_format: str, directory: Path) -> dict:
+def run_benchmark_import(database_url: str, workload: dict, input_format: str, directory: Path, *,
+                         engine="sequential", schema_url=None) -> dict:
     """Run and verify one import, retaining observations even if verification fails.
+
+    A comparison caller may own schema_url to retain both tables until its
+    multiset check. Otherwise this invocation owns and cleans a private schema.
 
     A failed verification/cleanup never turns a committed child into successful
     benchmark evidence. Retain measured time/RSS and the failed stage, remove
@@ -175,18 +179,19 @@ def run_benchmark_import(database_url: str, workload: dict, input_format: str, d
     directory.mkdir()
     path = Path(workload[input_format]["path"])
     run_id = directory.name
-    config = {"run_id": run_id, "input": str(path), "format": input_format,
+    config = {"run_id": run_id, "engine": engine, "input": str(path), "format": input_format,
               "rejects": str(directory / "rejects.jsonl")}
     config_path = directory / "config.json"
     config_path.write_text(json.dumps(config, indent=2))
     command = [sys.executable, "-m", "claims_data_lab.benchmark_worker", str(config_path)]
-    observation = {"run_id": run_id, "engine": "sequential", "format": input_format,
+    observation = {"run_id": run_id, "engine": engine, "format": input_format,
                    "rows": workload["rows"], "input": workload[input_format], "command": command,
                    "status": "failed", "accepted_rows_per_second": None}
     stage = "schema_setup"
     try:
         observation["database_memory_before"] = container_memory_snapshot()
-        with private_schema(database_url) as scoped_url:
+        scope = private_schema(database_url) if schema_url is None else nullcontext(schema_url)
+        with scope as scoped_url:
             environment = dict(os.environ, DATABASE_URL=scoped_url, PYTHONDONTWRITEBYTECODE="1")
             stage = "import"
             observation.update(observe_import(command, environment, directory))
@@ -201,6 +206,8 @@ def run_benchmark_import(database_url: str, workload: dict, input_format: str, d
         observation["status"] = "passed" if successful else "failed"
         if successful:
             observation["accepted_rows_per_second"] = result["inserted"] / observation["process_seconds"]
+        stage = "observation_write"
+        (directory / "observation.json").write_text(json.dumps(observation, indent=2))
     except BaseException as error:
         observation.update({"status": "failed", "accepted_rows_per_second": None,
                             "failed_stage": stage, "error_type": type(error).__name__})
@@ -211,7 +218,6 @@ def run_benchmark_import(database_url: str, workload: dict, input_format: str, d
         except OSError as persistence_error:
             error.add_note(f"Observation persistence failed: {type(persistence_error).__name__}")
         raise
-    (directory / "observation.json").write_text(json.dumps(observation, indent=2))
     return observation
 
 def environment_evidence(database_url: str) -> dict:
