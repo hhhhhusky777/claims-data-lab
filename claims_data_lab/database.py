@@ -2,6 +2,9 @@
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from time import perf_counter
+
+from .measurements import ImportMeasurements
 
 from psycopg import Connection
 
@@ -31,7 +34,7 @@ INSERT INTO imported_payouts (
 
 
 @contextmanager
-def transaction(connection: Connection) -> Iterator[None]:
+def transaction(connection: Connection, *, measurements: ImportMeasurements | None = None) -> Iterator[None]:
     """Own the transaction for one file on an idle PostgreSQL connection.
 
     The pipeline opens the connection with autocommit=True and enters this
@@ -42,15 +45,30 @@ def transaction(connection: Connection) -> Iterator[None]:
     can leave the outcome unknown, so callers must inspect the database before
     retrying. This append-only import deliberately has no automatic retries.
     """
+    started = perf_counter() if measurements is not None else None
+    finishing = None
+    finish_stage = "commit"
     try:
         with connection.transaction():
-            yield
+            if measurements is not None:
+                measurements.record("begin", perf_counter() - started)
+            try:
+                yield
+            except BaseException:
+                finish_stage = "rollback"
+                raise
+            finally:
+                if measurements is not None:
+                    finishing = perf_counter()
     except BaseException as error:
         error.add_note(
             "File transaction failed. If COMMIT was interrupted, inspect PostgreSQL "
             "before retrying; a repeated successful import appends rows."
         )
         raise
+    finally:
+        if measurements is not None and finishing is not None:
+            measurements.record(finish_stage, perf_counter() - finishing)
 
 
 def create_tables(connection: Connection) -> None:

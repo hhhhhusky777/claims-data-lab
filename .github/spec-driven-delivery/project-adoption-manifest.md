@@ -20,20 +20,20 @@
 | Target base revision | `26c219a905c2ea98cdf19210e9fa39928962abd9` |
 | Adoption owner | Repository owner hhhhhusky777 |
 | Required review | Two independent adoption reviews followed by human acceptance |
-| Last verified | 2026-11-23; README and authority inventory reconciled with accepted PostgreSQL transformation design; installation acceptance remains in PR #1 |
+| Last verified | 2026-11-24; README import, optional Spark engine, baseline/comparison and performance authority inventory reconciled; installation acceptance remains in PR #1 |
 
 ## Canonical project authorities and discovery inventory
 
 | Concern | Canonical source / evidence | Applicability and owner |
 | --- | --- | --- |
 | Contributor entry and business/data contracts | [README](../../README.md) | Owner-maintained Phase 1 contract and staged roadmap |
-| Test strategy and commands | [README Definition of Done](../../README.md#definition-of-done) | Runtime and unit/integration test commands are documented; detailed run evidence belongs in the PR |
+| Test strategy and commands | [README tests](../../README.md#tests), [benchmark](../../README.md#phase-2--sequential-benchmark-t1), [Spark checks](../../README.md#spark-transformation-engine-t2), [paired comparison](../../README.md#performance-comparison-t3) | Unit/integration and reproducible workload commands are documented; detailed run evidence belongs in the PR |
 | Branch, review, and merge | [AGENTS.md](../../AGENTS.md) | Owner accepts adoption and authorizes target merge |
 | Security and synthetic data | [README](../../README.md), [AGENTS.md](../../AGENTS.md) | Synthetic fixtures only; keep credentials and generated state out of Git |
 | Documentation and learning boundaries | [AGENTS.md](../../AGENTS.md) | English identifiers/docstrings; implementation scope follows the owner’s explicit learning request |
-| Data and concurrency | [README](../../README.md#input-contract) | Fixed types, append-only import, bounded groups and one transaction per file |
+| Data and concurrency | [README](../../README.md#input-contract) | Fixed types, append-only import, bounded driver insert groups and one transaction per file; optional pure local Spark conversion |
 | CI, release, operations | [README](../../README.md#quick-start) | Local PostgreSQL setup and cleanup; CI and cloud release remain future work |
-| Performance Goals and Evidence | [README](../../README.md#performance-goals-and-evidence) | Owner-defined staged approach and accepted starting synthetic workload; numeric improvement targets and detailed benchmark configuration remain for Phase 2 |
+| Performance Goals and Evidence | [README](../../README.md#performance-goals-and-evidence) | Owner-defined staged approach, accepted synthetic workload and delivered benchmark configuration/commands; numeric improvement targets remain unset |
 | Durable delivery decisions | [solution whiteboard](solution-whiteboard.md), [delivery archives](archive/), Git and pull requests | Whiteboard owns current design; an active implementation plan owns task state; closing archives preserve completed delivery sources |
 | Project Experience | [Experience](experience.md) | Verified lessons maintained by contributors, subject to current authority |
 | Reusable guidance | [Knowledge Base](knowledge-base/README.md) | Complete installer-managed tree at the pinned revision |
@@ -51,7 +51,7 @@ The installer and runtime are machine-local and ignored through Git's local excl
 | Documentation | Check relative links and `git diff --check` for this adoption |
 | Runtime | `./install-sdd.sh --revision d038cdb6878232583085231f57dcc4b872124242 --validate` |
 | Product tests | [README tests](../../README.md#tests) documents unit and isolated PostgreSQL integration commands; review evidence remains in the PR |
-| Performance | Numeric workload and targets remain open; does not block adoption or correctness work; blocks dependent performance decisions until accepted |
+| Performance | Accepted workload, runtime resources and measurement method are defined in README; numeric improvement targets remain unset; claims require evidence bound to the workload, candidate and environment |
 | CI and environments | Local run instructions exist; automated CI and cloud deployment remain deferred |
 | Playbook deviations | None proposed |
 | Human decision | Owner accepted adoption of candidate 243c302 after both reviews; acceptance recorded in [PR #1](https://github.com/hhhhhusky777/claims-data-lab/pull/1). Protected-target merge remains separate. |

@@ -131,6 +131,59 @@ TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests
 
 Do not interpret skipped integration cases as PostgreSQL evidence. Review results and the current validation boundary in [PR #2](https://github.com/hhhhhusky777/claims-data-lab/pull/2).
 
+## Phase 2 — Sequential benchmark (T1)
+
+The optional benchmark tooling uses Python 3.12.9 and pinned dependencies in `requirements-benchmark.txt`. It keeps the sequential import algorithm and 500-row groups. Install with your configured package mirror and persistent cache:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-benchmark.txt
+```
+
+Use a separate disposable PostgreSQL container. Reuse a cached image where available; preflight any required image download under your host's download rules. The accepted local profile limits this database to one CPU and 1 GiB memory. The benchmark creates and drops only its own private schemas, and never starts or stops containers itself.
+
+```sh
+docker run --pull=never --name claims-data-lab-benchmark -d \
+  --label codex.project=claims-data-lab --label codex.task=phase2-baseline \
+  --cpus 1 --memory 1g \
+  -e POSTGRES_USER=claims -e POSTGRES_PASSWORD=claims_local_demo -e POSTGRES_DB=claims \
+  -p 127.0.0.1:55433:5432 postgres:16-alpine
+
+docker exec claims-data-lab-benchmark pg_isready -U claims -d claims
+export DATABASE_URL='postgresql://claims:claims_local_demo@127.0.0.1:55433/claims'
+export BENCHMARK_CONTAINER=claims-data-lab-benchmark
+.venv/bin/python -m claims_data_lab.benchmark
+```
+
+Wait for database readiness before starting. One invocation generates equivalent 100,000- and 1,000,000-row CSV/JSONL files, performs one small unmeasured warm-up per format, then runs three measured imports per size/format (12 measured imports). Each import uses a fresh Python process and private schema. The workload repeats payout IDs every 50,000 rows and includes signed amounts. Its seed is 42; it injects no invalid records into throughput runs. Generation is incremental and uses real files.
+
+The printed `artifacts/phase2-baseline/<invocation>/` directory contains:
+
+| File | Meaning |
+| --- | --- |
+| `environment.json` | Commit/dirty state, Python/dependency versions, host capacity, database settings and optional Docker limits/image ID; no connection string |
+| `workloads.json` | Seed, row counts, paths, exact byte sizes and SHA-256 hashes |
+| `runs.jsonl` | Every measured result, including failures, commands, counts, full-column verification and sampled memory |
+| `summary.json` | Successful-run median/range plus passed/total counts; failed imports have no successful throughput |
+| Per-run directory | Nonsecret configuration, stdout JSON, correlated logs, rejection diagnostics and `observation.json`; measured evidence survives later verification/cleanup failures |
+
+The supervisor measures process launch through observed exit. Generation, schema setup/cleanup and post-run correctness queries are outside that interval. Polling at 100 ms may add up to one sample interval to observed elapsed time. Worker timers expose read, transform, SQL insert, connection, transaction begin/commit/rollback and whole-pipeline seconds. The residual process interval includes interpreter/module startup, shutdown and polling; it is not pure startup time. Stage intervals can nest, so do not add all timers together.
+
+Memory is the maximum sampled sum of importer/descendant RSS, not an exact peak or unique physical footprint: samples can miss short peaks/children and count shared pages twice. Permission failures and exit races are retained in sampling notes. `BENCHMARK_CONTAINER` adds separate before/after database memory snapshots outside the timed interval; these are not database peaks. OS/database cache warmth is uncontrolled and disclosed. Instruments add overhead, and results describe this instrumented workload and host only.
+
+After each run, an independent SQL expression checks every stored column, source location and expected multiplicity against the accepted formula. Row counts alone are insufficient. Verification is outside the import timing. Generated datasets/results remain ignored; retain sanitized evidence in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). Spark and comparative measurements belong to later tasks.
+
+Read the T1 code in this order: `workloads.py` generates real files; `benchmark.py` supervises runs and verifies stored values; `benchmark_worker.py` launches the measured import; `measurements.py` aggregates optional timers used by `pipeline.py` and `database.py`.
+
+```sh
+# Focused benchmark tests; database cases skip unless explicitly enabled.
+TEST_DATABASE_URL="$DATABASE_URL" .venv/bin/python -m unittest discover -s tests -p test_benchmark.py -v
+
+# After the owned benchmark environment is no longer needed:
+docker stop claims-data-lab-benchmark
+docker rm -v claims-data-lab-benchmark
+```
+
 ## Definition of Done
 
 - Both input formats produce the known column values and committed counts in PostgreSQL.
@@ -152,6 +205,76 @@ docker rm -v claims-data-lab-dev
 
 Measure the working import baseline before changing it. Candidate experiments include PostgreSQL COPY, [bounded pipeline parallelism](https://github.com/hhhhhusky777/claims-data-lab/issues/3), and the same transformation in PySpark. Compare output correctness, end-to-end throughput, stage costs and memory on identical workloads. Spark can distribute transformation, while destination loading can remain a bottleneck.
 
+## Spark transformation engine (T2)
+
+The optional `--engine spark` path uses classic PySpark 4.0.4 with Python 3.12.9 and Java 17. The verified Java build for this experiment is Temurin 17.0.21.1+2 on macOS ARM64. Install from an existing persistent cache or a verified source following host download rules; PySpark's source distribution is about 434 MB. The ordinary sequential command needs neither Java nor PySpark.
+
+```sh
+.venv/bin/python -m pip install -r requirements-spark.txt
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+```
+
+For an unpacked Java archive, set `JAVA_HOME` to its `Contents/Home` directory instead. This workspace keeps its checksum-verified runtime at `../claims-runtime-cache/java17/jdk-17.0.21.1+2/Contents/Home`. The official [Temurin archive](https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21.1%2B2/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.21.1_2.tar.gz) SHA-256 is `2a88ccb044a8fb00957be93245da6357c11b55717511509d147cbcc5d93b2109`. The pinned PySpark source SHA-256 is `7e119366364d48e3cda1b1efd1ebc6cd672949500667c9cabbeef858daba700f`. Keep archives/caches outside Git; no host-wide Java installation is required when using an unpacked archive.
+
+With the existing local PostgreSQL setup and DATABASE_URL:
+
+```sh
+.venv/bin/python -m claims_data_lab \
+  --input fixtures/payouts/2026-11-18.jsonl --format jsonl \
+  --batch-rows 500 --rejects artifacts/spark-rejects.jsonl --engine spark
+```
+
+Expected stdout is `{"inserted": 3, "rejected": 0}` after commit. Spark diagnostics use stderr. The Python API accepts `run_pipeline(..., engine="spark")`; existing calls and an omitted option remain sequential. A missing runtime is a fatal import error, with no automatic fallback or retry.
+
+```text
+Existing CSV/JSONL reader (serial)
+  → temporary JSONL envelopes retaining source location and native values
+  → Spark textFile partitions, local[2], eight requested partitions
+  → pure mapPartitions calls to the existing converter
+  → DISK_ONLY outcomes, fully materialized before database loading
+  → driver iterator without prefetch
+  → shared Psycopg groups and one file transaction
+```
+
+The reader still owns quoted multiline CSV, BOM handling and JSONL physical line numbers. This experiment parallelizes conversion, while input parsing/staging and database loading remain driver responsibilities. Workers never receive database URLs or write rejection files. The driver restores its environment after sanitizing credentials from the launched Spark processes. One importer per Python process is supported; each call creates/stops its own SparkContext, and the SDK rejects a second concurrent context. The driver and workers use the same Python executable.
+
+The driver opens the file transaction before staging; fatal staging, worker, transfer, rejection-output or database errors roll it back. Expected row errors keep the same source locations and reasons. All cached outcomes and temporary envelope/package/cache files are cleaned before commit. Cleanup failures preserve an existing primary error. Diagnostic rejection order and generated identity IDs are not comparison keys; duplicate values remain separate appended rows.
+
+Spark is configured for two local task slots, a 1 GiB driver heap and loopback driver RPC, with its UI disabled. The heap setting excludes Python workers/native memory. DISK_ONLY avoids keeping all outcomes in the Python driver, but iteration can require the largest partition, and a single large record can still consume substantial memory. This local setup does not prove multi-machine operation; a cluster would require shared storage and separately verified packaging/security.
+
+Native event logs remain under ignored `artifacts/spark-events/<invocation>/`. Optional ImportMeasurements snapshots retain partition row counts, summed individually pickled-row bytes and native task launch/finish evidence. Those serialized-byte sums exclude Spark framing and object/JVM overhead. The implementation collects only one small metadata item per partition, never the full dataset. Startup, staging, materialization and partition-summary timing are separate; SQL time nests inside driver consumption. T3 reruns both engines for the formal performance comparison after this refactor.
+
+```sh
+# Run actual Spark/PostgreSQL task checks; runtime and database must be available.
+RUN_SPARK_TESTS=1 TEST_DATABASE_URL="$DATABASE_URL" \
+  .venv/bin/python -m unittest discover -s tests -p test_spark_transform.py -v
+```
+
+Start reading `pipeline.py` for the shared writer, `spark_transform.py` for staging/materialization/driver iteration, and `transform.py` for the pure conversion boundary. Worker/task failures are tested as fatal; tests also cover multiline/native-type parity, append behavior, owned cleanup and rollback after an earlier insert group. Native event timing proves overlapping local tasks; it is not a production throughput claim.
+
+The pinned SDK can emit socket ResourceWarnings during collection/iteration. Its source relies on garbage collection for those sockets; see the related [Apache issue](https://issues.apache.org/jira/browse/SPARK-54247). Tests retain these warnings. Application-owned iterator/cache/context/temp cleanup is verified, while sustained resource stability is unmeasured.
+
+## Performance comparison (T3)
+
+After installing `requirements-spark.txt` and setting `JAVA_HOME`, use the same owned PostgreSQL profile as T1 (one CPU/1 GiB, cached image, loopback connection). Run:
+
+```sh
+export BENCHMARK_CONTAINER=claims-data-lab-benchmark
+.venv/bin/python -m claims_data_lab.comparison
+```
+
+This generates identical CSV/JSONL inputs once, performs four small unmeasured warm-ups (each engine/format), then runs 24 measured imports: two sizes × two formats × two engines × three repeats. Each size/format pair alternates engine order AB/BA/AB. Every importer starts a fresh Python process; Spark includes a fresh JVM launch. Input hashes, PostgreSQL limits/settings and host/runtime details are retained. The earlier T1 results are historical context; this command reruns sequential and Spark at the same current code revision.
+
+The current Spark engine fully materializes outcomes before loading. [Issue #6](https://github.com/hhhhhusky777/claims-data-lab/issues/6) records a future overlap experiment; it is not part of this comparison.
+
+Under ignored `artifacts/phase2-comparison/<invocation>/`, `runs.jsonl` preserves every measured import, `pairs.jsonl` preserves each pair's comparison/validity and `summary.json` reports per-engine median/range for complete valid pairs, along with scheduled/valid pair counts. Partial observations and original errors survive verification/cleanup failures. Reports do not silently retry or label failed pairs as successful comparison evidence.
+
+Both private tables remain until a bidirectional PostgreSQL `EXCEPT ALL` comparison checks all source/payload columns and duplicate multiplicity, excluding generated identity IDs. Per-run independent formula checks still run. Schema setup, complete-row verification, pair comparison and schema cleanup are outside importer timing; schemas are removed after comparison. Separate database memory snapshots describe conditions before/after each import, not peak memory.
+
+Process elapsed time includes Python/JVM startup, staging, conversion/materialization, partition-statistics collection, transfer, insert groups, application cleanup and commit. Sampled importer/descendant RSS includes JVM/Python workers and may count shared pages twice or miss short peaks. SDK process teardown after the observed importer exit is not separately timed. SQL time nests inside consumption, so these intervals must not be summed. Spark materialization includes staged input, Python conversion, scheduling/serialization and cache writes; it is not isolated converter CPU time. OS/DB cache warmth and unrelated host activity remain uncontrolled and disclosed.
+
+The standard `python -m claims_data_lab.benchmark` entry still runs sequential-only T1-style baselines. T3 adds an engine selection in the internal worker configuration without changing import defaults or adding runtime admission rules. All observations, medians/ranges and the reviewed interpretation are retained in [PR #5](https://github.com/hhhhhusky777/claims-data-lab/pull/5). They are local experiment evidence, with no speed target or production/cluster capacity claim. The comparison retains sequential as the default; future performance changes need their own evidence.
+
 ## Phase 3 — Extend coverage
 
 Add Azure storage/orchestration, CDC/streaming, policy retrieval and cited AI answers, or an internal UI in independently designed increments. Each extension keeps its input contract and acceptance evidence explicit.
@@ -162,7 +285,7 @@ The accepted starting synthetic benchmark profile is 100,000 and 1,000,000 rows,
 
 The repository owner approves workload boundaries and performance goals. Small fixtures establish correctness and provide no capacity or latency claim. No numeric performance target has been accepted.
 
-Before optimization, agree on row counts, record sizes, key distribution, batch sizes, concurrency and available client/database resources. Add a repeatable benchmark command with seed and parameters. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
+The accepted T1 workload uses the deterministic formula in `workloads.py`: T(i mod 50000), version 1+(i mod 5), P(i mod 10000), date 2026-11-18, USD and amount ((i*7919+42) mod 200001)-100000 for zero-based i. Run `python -m claims_data_lab.benchmark` using Python 3.12.9, Psycopg 3.3.2, psutil 7.2.2, one importer and a one-CPU/1-GiB PostgreSQL container. Generated file metadata supplies exact record/file sizes. The command, measurement intervals, correctness checks and interpretation limits are documented above. Revise the accepted profile before changing these workload/resource conditions. Record batch seconds, accepted rows per second and relevant resource measurements, together with commit and environment details, in the existing pull request. Compare repeated runs with unchanged inputs and verify identical stored rows. Document variability and unmeasured conditions. Revisit the contract when workload, resources or goals change.
 
 ## Delivery playbook setup
 

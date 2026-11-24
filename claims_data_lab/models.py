@@ -58,3 +58,11 @@ class PipelineResult:
 
     inserted: int
     rejected: int
+
+
+@dataclass
+class ImportProgress:
+    """Driver-only failure location, shared by source stages and the writer."""
+
+    stage: str = "connect"
+    source_record: int | None = None

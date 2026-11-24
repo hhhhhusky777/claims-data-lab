@@ -4,7 +4,7 @@ import re
 from datetime import date
 
 from .errors import RowValidationError
-from .models import ImportedPayout, SourceRecord
+from .models import ImportedPayout, RejectedRecord, SourceRecord
 
 
 def _required_text(values: dict[str, object], field: str) -> str:
@@ -67,3 +67,17 @@ def transform_record(record: SourceRecord) -> ImportedPayout:
         currency=_required_text(values, "currency"),
         amount_cents=_bigint(record, "amount_cents"),
     )
+
+
+def convert_record(record: SourceRecord | RejectedRecord) -> ImportedPayout | RejectedRecord:
+    """Return a payout or located expected rejection, without external effects.
+
+    Both engines use this boundary. Unexpected failures keep their original
+    type/cause and abort the import; only RowValidationError is a row rejection.
+    """
+    if isinstance(record, RejectedRecord):
+        return record
+    try:
+        return transform_record(record)
+    except RowValidationError as error:
+        return RejectedRecord(record.source_file, record.source_record, str(error))
