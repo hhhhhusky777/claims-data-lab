@@ -4,11 +4,11 @@
 
 | Field | Value |
 | --- | --- |
-| State | `DISCUSSION` |
+| State | `CONCLUDED` |
 | Need / issue | [Issue #8](https://github.com/hhhhhusky777/claims-data-lab/issues/8) |
 | Owner | Repository owner hhhhhusky777 |
-| Concluded design revision | `None` |
-| Open owner decisions | Accept this offline-first design, workload and V1–V3/FC1–FC3; live model/budget decisions deferred |
+| Concluded design revision | `1d58018db35080ccac5d684cb92c480ecfc5bca3`; owner accepted2026-11-24 |
+| Open owner decisions | `None` for this delivery; D1–D7, workload and V1–V3/FC1–FC3 accepted; live model/budget decisions remain deferred |
 
 ## Discussion draft
 
@@ -174,7 +174,7 @@ sequenceDiagram
 | Error handling design | D2/D3 use atomic transactions, preserve prior state and original cause, reject stale publication; ambiguous COMMIT requires inspection rather than replay | Covered |
 | Experience and learning | Current Experience has no entries; Phase2 source/receipts confirm reusable Psycopg/timing but not AI performance; task reading stops retained | Covered |
 | Observability and diagnosability | D7 reuses logging/run_id and shared stage timers; errors retain document/revision/stage, no raw documents/credentials or second telemetry stack | Covered |
-| Performance design | D6 proposes three small documents and serial operations, exact search and measured timings without SLO/capacity claim; later semantic quality/ANN optimization deferred | Covered; owner profile acceptance pending |
+| Performance design | D6 proposes three small documents and serial operations, exact search and measured timings without SLO/capacity claim; later semantic quality/ANN optimization deferred | Covered; owner profile accepted2026-11-24 |
 | Proportional review | Assess document revision/vector integrity and honest offline status; do not demand cloud, ANN scale, production security or live-answer evidence for this scope | Covered |
 | Security basics | D1 explicit local files; SQL bound; separate owned tables/schema and synthetic data; no external disclosure/provider credentials, executable document instructions or public service | Covered |
 | Simple design and reuse | D2/D4 reuse PostgreSQL/pgvector/Psycopg; D7 stdlib and existing measurement; no ORM, mapping DSL, agent framework, queue or substitute embedding model | Covered |
@@ -197,20 +197,20 @@ sequenceDiagram
 
 | ID | Validation / authority / execution boundary | Protected outcome / risk / marginal value | Concrete invalid case | Failure effect / recovery | Cost / risk reduction | Existing or cheaper mechanism / coverage / why insufficient | Fail-close / test reference | Owner disposition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| V1 | D1/D5 document preparation and new CLI: nonblank ID, .md/.txt, valid UTF-8, ≤1MiB; inspect requires existing ID | Bounded real text/provenance; avoid unsupported format or fictitious document success | A PDF or >1MiB file, or inspecting absent ID | No document mutation; owner supplies supported input/ID then retries | Bounded read and stdlib checks; no new parser framework | Existing payout readers own different formats/locations; cannot parse document text; reuse argparse/file decoding and DB not-found lookup | FC1; real-file/CLI boundary tests | Pending |
-| V2 | D2/D3 publication: complete current-revision vectors; nonblank model, finite representable components/common dimension/nonzero norm | Avoid stale text/vector pairing, mixed/incomplete publication and undefined cosine distance | Caller embeds revisionA, document becomes revisionB before publication | Reject entire set, preserve current state; caller reloads B and recomputes complete set | One row lock/linear vector check; no retry service | Transactions ensure atomicity, but cannot identify stale semantic revision; add expected-revision comparison and reuse pgvector adaptation | FC2; stale/invalid/rollback integration | Pending |
-| V3 | D4 search: nonblank model, finite nonzero supported vector and positive integer limit | Coherent scoped cosine query; invalid caller input is not empty successful retrieval | Zero query vector or limit0 | Reject query; caller supplies compatible vector/model/positive limit | Small input checks; no similarity threshold | pgvector handles vector math/type limits; API owns model/safe query contract; no new ranker | FC3; numeric ranking/scoping/query-boundary tests | Pending |
+| V1 | D1/D5 document preparation and new CLI: nonblank ID, .md/.txt, valid UTF-8, ≤1MiB; inspect requires existing ID | Bounded real text/provenance; avoid unsupported format or fictitious document success | A PDF or >1MiB file, or inspecting absent ID | No document mutation; owner supplies supported input/ID then retries | Bounded read and stdlib checks; no new parser framework | Existing payout readers own different formats/locations; cannot parse document text; reuse argparse/file decoding and DB not-found lookup | FC1; real-file/CLI boundary tests | Approved |
+| V2 | D2/D3 publication: complete current-revision vectors; nonblank model, finite representable components/common dimension/nonzero norm | Avoid stale text/vector pairing, mixed/incomplete publication and undefined cosine distance | Caller embeds revisionA, document becomes revisionB before publication | Reject entire set, preserve current state; caller reloads B and recomputes complete set | One row lock/linear vector check; no retry service | Transactions ensure atomicity, but cannot identify stale semantic revision; add expected-revision comparison and reuse pgvector adaptation | FC2; stale/invalid/rollback integration | Approved |
+| V3 | D4 search: nonblank model, finite nonzero supported vector and positive integer limit | Coherent scoped cosine query; invalid caller input is not empty successful retrieval | Zero query vector or limit0 | Reject query; caller supplies compatible vector/model/positive limit | Small input checks; no similarity threshold | pgvector handles vector math/type limits; API owns model/safe query contract; no new ranker | FC3; numeric ranking/scoping/query-boundary tests | Approved |
 
 ## Newly introduced fail-closed behaviors
 
 | ID | Trigger | Required response | Concrete example | Impact | Recovery / best next action | Owner disposition |
 | --- | --- | --- | --- | --- | --- | --- |
-| FC1 | V1 unsupported input/absent inspection ID | Stop requested operation; no successful document result or mutation | prepare receives a PDF | That operation fails; existing records remain | User supplies UTF-8 .md/.txt ≤1MiB and nonblank ID, or selects existing ID; then retry | Pending |
-| FC2 | V2 malformed/incomplete/stale publication | Publish nothing; preserve current committed revision/vector set | RevisionA's vectors arrive after revisionB is saved | New vectors rejected; B remains prepared/current | Caller reloads B, obtains complete compatible vectors and republishes against B; uncertain COMMIT inspected first | Pending |
-| FC3 | V3 invalid vector query | Do not return fabricated/empty-success search | Query vector is all zeros | Query fails; documents unchanged | Caller supplies nonzero finite compatible vector/model and positive limit; then repeat read | Pending |
+| FC1 | V1 unsupported input/absent inspection ID | Stop requested operation; no successful document result or mutation | prepare receives a PDF | That operation fails; existing records remain | User supplies UTF-8 .md/.txt ≤1MiB and nonblank ID, or selects existing ID; then retry | Approved |
+| FC2 | V2 malformed/incomplete/stale publication | Publish nothing; preserve current committed revision/vector set | RevisionA's vectors arrive after revisionB is saved | New vectors rejected; B remains prepared/current | Caller reloads B, obtains complete compatible vectors and republishes against B; uncertain COMMIT inspected first | Approved |
+| FC3 | V3 invalid vector query | Do not return fabricated/empty-success search | Query vector is all zeros | Query fails; documents unchanged | Caller supplies nonzero finite compatible vector/model and positive limit; then repeat read | Approved |
 
 These are new API/CLI rejection contracts, not additional delivery gates. Existing transaction failures, extension/runtime absence and download policy retain their owning boundaries. Ordinary tests remain under the project's existing validation gates.
 
 ## Design amendments / human brief
 
-No frozen design yet. Owner acceptance follows exact-candidate approval by both fresh retained reviewers, then a metadata-only conclusion transition verified by them before task planning. HUMAN_DECISION: accept D1–D7, proposed workload and V1–V3/FC1–FC3. DISCLOSE: offline component completion only, no live semantic/answer proof. AGENT_ACTION: plan and implement after acceptance. NONE: implementation/paid-call/merge authority inferred from this document alone.
+Owner accepted D1–D7, the three-document/≤1MiB/serial workload and V1–V3/FC1–FC3 on2026-11-24 after both retained approvals. The owner also selected Phase3 task naming without lettered subphases; reviewers verified that naming-only revision1d58018. This metadata-only conclusion transition must be verified by both reviewers before freeze/planning. DISCLOSE: offline component completion only, no live semantic/answer proof. AGENT_ACTION: prepare the reviewed task plan. HUMAN_DECISION: subsequent plan/implementation acceptance and protected-main merge remain separate; no paid-call authority.
